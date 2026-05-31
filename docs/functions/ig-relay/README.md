@@ -9,40 +9,44 @@ flow Claude follows.
 ## Prerequisites
 
 - `browser-harness` installed and on PATH (`browser-harness --doctor`).
-- Chrome running and logged into Instagram (Phase 1 uses your everyday Chrome).
+- The dedicated ig-relay Chrome running and logged into Instagram (see Setup).
+
+## Setup (one time)
+
+ig-relay uses a **dedicated, isolated Chrome profile** (`~/.browser-harness-ig`,
+port 9334) so it never touches your everyday browsing.
+
+```bash
+docs/functions/ig-relay/start-headless.sh --gui   # opens a visible window
+# → log into Instagram in that window (handles 2FA). Cookies then persist on disk.
+```
+
+Re-run `start-headless.sh` (with or without `--gui`) anytime to bring it back up;
+the login is reused until Instagram ends the session.
 
 ## Quick start
 
+Run snippets with the `ig.sh` wrapper — it pins browser-harness to the dedicated
+profile and errors if that Chrome isn't up.
+
 ```bash
 # 1. List your DM inbox (rows of name + preview)
-browser-harness < docs/functions/ig-relay/snippets/read_inbox.py
+docs/functions/ig-relay/ig.sh read_inbox
 
 # 2. Open a conversation by name and read its messages (returns its thread_id)
-IG_OPEN="Jane Choi" browser-harness < docs/functions/ig-relay/snippets/read_inbox.py
+IG_OPEN="Jane Choi" docs/functions/ig-relay/ig.sh read_inbox
 #    …or re-read a known thread by id:
-IG_THREAD=<thread_id> browser-harness < docs/functions/ig-relay/snippets/read_inbox.py
+IG_THREAD=<thread_id> docs/functions/ig-relay/ig.sh read_inbox
 
 # 3. Send an approved reply (only after you OK the exact text)
-IG_OPEN="Jane Choi" IG_TEXT="your message" browser-harness < docs/functions/ig-relay/snippets/send_reply.py
+IG_OPEN="Jane Choi" IG_TEXT="your message" docs/functions/ig-relay/ig.sh send_reply
 #    …or by id:
-IG_THREAD=<thread_id> IG_TEXT="your message" browser-harness < docs/functions/ig-relay/snippets/send_reply.py
+IG_THREAD=<thread_id> IG_TEXT="your message" docs/functions/ig-relay/ig.sh send_reply
 ```
 
 Each snippet prints a `==BH_PAYLOAD==` line followed by one JSON object. Instagram
 only reveals a thread id once a conversation is opened, so target by name
 (`IG_OPEN`) the first time and reuse the returned `thread_id` afterward.
-
-## Dedicated account (later)
-
-To isolate this from your primary Instagram, switch to a dedicated account in an
-isolated headless Chrome:
-
-```bash
-docs/functions/ig-relay/start-headless.sh --gui   # one-time: log in by hand
-docs/functions/ig-relay/start-headless.sh         # headless, reuses cookies
-export BU_CDP_URL=http://127.0.0.1:9334 BU_NAME=ig
-# then run the same snippets above
-```
 
 ## Layout
 
@@ -50,7 +54,8 @@ export BU_CDP_URL=http://127.0.0.1:9334 BU_NAME=ig
 docs/functions/ig-relay/
 ├── CLAUDE.md            ← contract, flow, safety
 ├── README.md            ← this file
-├── start-headless.sh    ← isolated Chrome launcher (dedicated-account path)
+├── ig.sh                ← wrapper: run a snippet against the dedicated profile
+├── start-headless.sh    ← isolated Chrome launcher (dedicated profile, port 9334)
 └── snippets/
     ├── read_inbox.py    ← list inbox / open+read a thread by name or id (pure read)
     └── send_reply.py    ← send an approved reply (IG_TEXT + IG_OPEN or IG_THREAD)
