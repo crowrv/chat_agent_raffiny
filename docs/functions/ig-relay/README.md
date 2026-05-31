@@ -14,17 +14,23 @@ flow Claude follows.
 ## Quick start
 
 ```bash
-# 1. Read your DM inbox (thread list + previews)
+# 1. List your DM inbox (rows of name + preview)
 browser-harness < docs/functions/ig-relay/snippets/read_inbox.py
 
-# 2. Read one conversation's recent messages
+# 2. Open a conversation by name and read its messages (returns its thread_id)
+IG_OPEN="Jane Choi" browser-harness < docs/functions/ig-relay/snippets/read_inbox.py
+#    …or re-read a known thread by id:
 IG_THREAD=<thread_id> browser-harness < docs/functions/ig-relay/snippets/read_inbox.py
 
 # 3. Send an approved reply (only after you OK the exact text)
+IG_OPEN="Jane Choi" IG_TEXT="your message" browser-harness < docs/functions/ig-relay/snippets/send_reply.py
+#    …or by id:
 IG_THREAD=<thread_id> IG_TEXT="your message" browser-harness < docs/functions/ig-relay/snippets/send_reply.py
 ```
 
-Each snippet prints a `==BH_PAYLOAD==` line followed by one JSON object.
+Each snippet prints a `==BH_PAYLOAD==` line followed by one JSON object. Instagram
+only reveals a thread id once a conversation is opened, so target by name
+(`IG_OPEN`) the first time and reuse the returned `thread_id` afterward.
 
 ## Dedicated account (later)
 
@@ -46,6 +52,6 @@ docs/functions/ig-relay/
 ├── README.md            ← this file
 ├── start-headless.sh    ← isolated Chrome launcher (dedicated-account path)
 └── snippets/
-    ├── read_inbox.py    ← read inbox / one thread (pure read)
-    └── send_reply.py    ← send an approved reply (requires IG_THREAD + IG_TEXT)
+    ├── read_inbox.py    ← list inbox / open+read a thread by name or id (pure read)
+    └── send_reply.py    ← send an approved reply (IG_TEXT + IG_OPEN or IG_THREAD)
 ```

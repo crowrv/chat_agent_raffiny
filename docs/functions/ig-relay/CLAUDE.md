@@ -15,29 +15,39 @@ other transport, bulk/unsolicited messaging, or creating/warming IG accounts.
 
 ## Owned Files
 
-- `snippets/read_inbox.py`: browser-harness snippet. Default = read inbox thread
-  list + previews. With `IG_THREAD=<id|url>` = read one thread's recent messages.
-  Pure read, no side effects. Emits JSON after a `==BH_PAYLOAD==` marker.
-- `snippets/send_reply.py`: browser-harness snippet. Requires `IG_THREAD` and
-  `IG_TEXT`. Opens the thread, types via CDP, presses Enter, reports whether the
-  composer cleared. Run ONLY after user approval.
+- `snippets/read_inbox.py`: browser-harness snippet (pure read). Modes:
+  - default → list the inbox as `rows` of `{ name, preview, x, y }`.
+  - `IG_OPEN="<name>"` → click the inbox row whose name contains `<name>` and read
+    that conversation's recent `messages` (also returns its `thread_id`).
+  - `IG_THREAD=<id|url>` → open a known thread directly and read its `messages`.
+  Emits JSON after a `==BH_PAYLOAD==` marker:
+  `{ page_status, page_url, page_title, mode, thread_id, rows, messages }`.
+  Note: Instagram does NOT expose a thread id in the inbox list — you only get a
+  `thread_id` after opening a thread (by name the first time, by id thereafter).
+- `snippets/send_reply.py`: browser-harness snippet. Requires `IG_TEXT` plus one of
+  `IG_OPEN="<name>"` or `IG_THREAD=<id|url>`. Opens the thread, inserts the text via
+  `type_text` (Input.insertText — inserts once; per-key typing double-types Korean),
+  presses Enter, reports `{ status, detail, thread_id }` where status is
+  `sent | uncertain | error`. Run ONLY after user approval.
 - `start-headless.sh`: isolated Chrome launcher (port 9334, profile
   `~/.browser-harness-ig`, `--gui` for one-time login). The Phase-2 path for a
   dedicated account.
 
 ## The Flow
 
-1. **Read.** `browser-harness < snippets/read_inbox.py`. Parse the JSON after
-   `==BH_PAYLOAD==`. If `page_status` is not `ok`, do NOT guess — tell the user
-   to log in (Phase 1: in their Chrome; Phase 2: `start-headless.sh --gui`).
-2. **Summarize** the threads/messages in chat. Let the user pick one.
-3. **Read the thread** with `IG_THREAD=<id> browser-harness < snippets/read_inbox.py`
-   to see recent messages, then draft a reply together.
+1. **Read the inbox.** `browser-harness < snippets/read_inbox.py`. Parse the JSON
+   after `==BH_PAYLOAD==`. If `page_status` is not `ok`, do NOT guess — tell the
+   user to log in (Phase 1: in their Chrome; Phase 2: `start-headless.sh --gui`).
+2. **Summarize** the `rows` (name + preview) in chat. Let the user pick one.
+3. **Read the thread** with `IG_OPEN="<name>" browser-harness < snippets/read_inbox.py`
+   to open it by name and see recent `messages` (the output's `thread_id` is the
+   stable id you can reuse with `IG_THREAD=<id>` afterward). Draft a reply together.
 4. **Approval gate.** Show the user the EXACT reply text and the target thread.
    Wait for an explicit "send". Never auto-send.
-5. **Send.** `IG_THREAD=<id> IG_TEXT="<approved text>" browser-harness < snippets/send_reply.py`.
-6. **Confirm** by re-reading the thread (step 3) and checking the message appears.
-   Never assume a send worked from `status` alone.
+5. **Send.** `IG_OPEN="<name>" IG_TEXT="<approved text>" browser-harness < snippets/send_reply.py`
+   (or `IG_THREAD=<id> IG_TEXT=...` if you already have the id).
+6. **Confirm** by re-reading the thread (step 3, by `IG_THREAD=<id>`) and checking
+   the message appears correctly. Never assume a send worked from `status` alone.
 
 ## Browser Configuration
 
@@ -65,16 +75,21 @@ other transport, bulk/unsolicited messaging, or creating/warming IG accounts.
 `browser-harness --doctor` should show `chrome running`. Then:
 
 ```bash
-# read the inbox
+# list the inbox
 browser-harness < docs/functions/ig-relay/snippets/read_inbox.py
 
-# read one thread (replace <id> with a thread_id from the inbox output)
+# open a conversation by name and read its messages (returns its thread_id)
+IG_OPEN="Jane Choi" browser-harness < docs/functions/ig-relay/snippets/read_inbox.py
+
+# re-read a known thread by id
 IG_THREAD=<id> browser-harness < docs/functions/ig-relay/snippets/read_inbox.py
 ```
 
 A send is verified end-to-end only with the user present: after an approved
-`send_reply.py` run, re-read the thread and confirm the message appears exactly
-once. IG's DOM is obfuscated and changes over time — if `read_inbox.py` returns
-`unknown_layout` or `send_reply.py` reports `uncertain`, inspect the live page
-with `capture_screenshot()` and `js(...)` and update the selectors in the
-snippets.
+`send_reply.py` run, re-read the thread and confirm the message appears correctly
+(watch for garbled/doubled text). IG's DOM is obfuscated and changes over time — if
+`read_inbox.py` returns `unknown_layout`/empty `rows`, or `send_reply.py` reports
+`uncertain`, inspect the live page with `capture_screenshot()` and `js(...)` and
+update the selectors in the snippets. A `capture_screenshot()` before reading row
+geometry is required — background tabs report zero-height rects and the row filter
+drops everything.
