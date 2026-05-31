@@ -2,8 +2,11 @@
 #
 # Modes (env):
 #   (none)              list the DM inbox: rows of { name, preview, x, y }
-#   IG_OPEN="<name>"    open the inbox row whose name contains <name> (case-insensitive),
-#                       then read that conversation's recent messages
+#   IG_OPEN="<name>"    open the inbox row matching <name>, then read its messages.
+#                       Match is case-insensitive: exact name wins; otherwise a UNIQUE
+#                       substring match. Multiple substring matches -> error (so you
+#                       never silently open the wrong person). IG_THREAD takes priority
+#                       if both are set.
 #   IG_THREAD=<id|url>  open a known thread directly (by id or full /direct/t/<id>/ url),
 #                       then read its recent messages
 #
@@ -13,8 +16,10 @@
 #   IG_THREAD=112169376842688 browser-harness < docs/functions/ig-relay/snippets/read_inbox.py
 #
 # Output: a line "==BH_PAYLOAD==" followed by one JSON object:
-#   { page_status, page_url, page_title, mode, thread_id, rows, messages }
-# page_status is one of: ok | auth_required | challenge | two_factor | unknown_layout
+#   { page_status, page_url, page_title, mode, thread_id, rows, messages [, error] }
+#   page_status is one of: ok | auth_required | challenge | two_factor | unknown_layout
+#   mode is one of: inbox | open | thread
+#   error is present only when IG_OPEN matched zero or multiple rows.
 #
 # Notes on the approach (learned against live Instagram, 2026-05):
 # - The inbox renders conversations as div[role="button"] rows, NOT <a> links;
@@ -33,6 +38,20 @@ def emit(d):
     print(json.dumps(d, ensure_ascii=False))
     raise SystemExit(0)
 
+def pick_row(rows, query):
+    """Return (row, error). Exact name match wins; else a unique substring match;
+    zero or multiple substring matches return an error rather than guessing."""
+    q = query.lower()
+    exact = [r for r in rows if r["name"].lower() == q]
+    if exact:
+        return exact[0], None
+    subs = [r for r in rows if q in r["name"].lower()]
+    if len(subs) == 1:
+        return subs[0], None
+    if not subs:
+        return None, "no inbox row matched IG_OPEN=" + query
+    return None, "IG_OPEN=%s is ambiguous; matches: %s" % (query, ", ".join(r["name"] for r in subs))
+
 STATUS_JS = """
   const url = location.href;
   let status = 'ok';
@@ -43,6 +62,8 @@ STATUS_JS = """
 """
 
 ROWS_JS = """
+  // Geometry filter tuned for a ~1200px-wide Chrome window. If the inbox shows 0
+  // rows on a much narrower/wider window, adjust r.left < 470 / r.width > 150.
   const rows = [];
   for (const b of document.querySelectorAll('div[role="button"]')) {
     const img = b.querySelector('img');
@@ -63,7 +84,7 @@ MSGS_JS = """
     const t = (d.innerText || '').trim();
     if (t) msgs.push(t);
   }
-  return { messages: msgs.slice(-25), url: location.href };
+  return { messages: msgs.slice(-25), url: location.href, title: document.title };
 """
 
 # Navigate: direct to a known thread, else to the inbox (for list or open-by-name).
@@ -78,28 +99,30 @@ time.sleep(2.0)
 capture_screenshot()  # force foreground layout so getBoundingClientRect is valid
 
 st = js(STATUS_JS)
-mode = "thread" if (THREAD or OPEN) else "inbox"
+mode = "thread" if THREAD else ("open" if OPEN else "inbox")
 if st["status"] != "ok":
     emit({"page_status": st["status"], "page_url": st["url"], "page_title": st["title"],
           "mode": mode, "thread_id": None, "rows": [], "messages": []})
 
-# OPEN by name: find the matching inbox row and click it open.
+# OPEN by name: find the matching inbox row and click it open. (IG_THREAD wins if both set.)
 if OPEN and not THREAD:
     rows = js(ROWS_JS)
-    match = next((r for r in rows if OPEN.lower() in r["name"].lower()), None)
-    if not match:
+    match, err = pick_row(rows, OPEN)
+    if err:
         emit({"page_status": "ok", "page_url": st["url"], "page_title": st["title"],
-              "mode": "open", "thread_id": None, "rows": rows, "messages": [],
-              "error": "no inbox row name matched IG_OPEN=" + OPEN})
+              "mode": "open", "thread_id": None, "rows": rows, "messages": [], "error": err})
     click_at_xy(match["x"], match["y"])
     time.sleep(2.0)
 
 # Read messages for a thread (opened by id/url or by name).
 if THREAD or OPEN:
     msg = js(MSGS_JS)
-    tid = msg["url"].split("/direct/t/")[1].split("/")[0] if "/direct/t/" in msg["url"] else None
-    emit({"page_status": "ok" if msg["messages"] else "unknown_layout",
-          "page_url": msg["url"], "page_title": st["title"],
+    on_thread = "/direct/t/" in msg["url"]
+    tid = msg["url"].split("/direct/t/")[1].split("/")[0] if on_thread else None
+    # An opened thread with no extractable messages is still a valid state, not a
+    # selector failure — only call it unknown_layout if we never landed on a thread.
+    emit({"page_status": "ok" if (on_thread or msg["messages"]) else "unknown_layout",
+          "page_url": msg["url"], "page_title": msg.get("title", st["title"]),
           "mode": "thread", "thread_id": tid, "rows": [], "messages": msg["messages"]})
 
 # Default: list the inbox.

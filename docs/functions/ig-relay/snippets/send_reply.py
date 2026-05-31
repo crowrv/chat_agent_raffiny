@@ -1,10 +1,13 @@
 # send_reply.py — browser-harness snippet (SEND action; requires prior user approval).
 #
 # Target the conversation by EITHER:
-#   IG_OPEN="<name>"     click the inbox row whose name contains <name>, OR
+#   IG_OPEN="<name>"     click the matching inbox row. Match is case-insensitive:
+#                        exact name wins, else a UNIQUE substring match; multiple
+#                        substring matches abort with an error (never guess who to
+#                        message). IG_THREAD takes priority if both are set.
 #   IG_THREAD=<id|url>   open a known thread directly
 # Plus (required):
-#   IG_TEXT="the exact approved reply text"
+#   IG_TEXT="the exact approved reply text"  (sent verbatim, including any newlines)
 #
 # Run (only after the user approves the exact text):
 #   IG_OPEN="Jane Choi" IG_TEXT="hi!" browser-harness < docs/functions/ig-relay/snippets/send_reply.py
@@ -25,6 +28,20 @@ def emit(status, detail, thread_id=None):
     print(json.dumps({"status": status, "detail": detail, "thread_id": thread_id}, ensure_ascii=False))
     raise SystemExit(0)
 
+def pick_row(rows, query):
+    """Return (row, error). Exact name match wins; else a unique substring match;
+    zero or multiple substring matches return an error rather than guessing."""
+    q = query.lower()
+    exact = [r for r in rows if r["name"].lower() == q]
+    if exact:
+        return exact[0], None
+    subs = [r for r in rows if q in r["name"].lower()]
+    if len(subs) == 1:
+        return subs[0], None
+    if not subs:
+        return None, "no inbox row matched IG_OPEN=" + query
+    return None, "IG_OPEN=%s is ambiguous; matches: %s" % (query, ", ".join(r["name"] for r in subs))
+
 if not TEXT or not (OPEN or THREAD):
     emit("error", "IG_TEXT is required, plus one of IG_OPEN or IG_THREAD")
 
@@ -43,6 +60,7 @@ guard = js("""
   const url = location.href;
   if (url.includes('/accounts/login') || /\\/login(\\/|$|\\?)/.test(url)) return { ok:false, reason:'auth_required' };
   if (url.includes('/challenge')) return { ok:false, reason:'challenge' };
+  if (url.includes('/two_factor') || url.includes('/2fa')) return { ok:false, reason:'two_factor' };
   return { ok:true };
 """)
 if not guard.get("ok"):
@@ -63,9 +81,9 @@ if OPEN and not THREAD:
       }
       return rows;
     """)
-    match = next((r for r in rows if OPEN.lower() in r["name"].lower()), None)
-    if not match:
-        emit("error", "no inbox row name matched IG_OPEN=" + OPEN)
+    match, err = pick_row(rows, OPEN)
+    if err:
+        emit("error", err)
     click_at_xy(match["x"], match["y"])
     time.sleep(2.0)
 
@@ -74,6 +92,9 @@ if OPEN and not THREAD:
 # event, which double-types every character — including multibyte Korean. insertText
 # inserts exactly once and still fires the native input event IG's composer reads.)
 # Then Enter sends.
+# COMPOSER must stay a hardcoded constant: it is interpolated into js() below via
+# json.dumps (correct string escaping). Do NOT make it env/user-controlled or that
+# interpolation becomes a JS-injection surface.
 COMPOSER = 'div[contenteditable="true"][role="textbox"]'
 if not js("(()=>{const e=document.querySelector(%s);if(!e)return false;e.focus();return true;})()" % json.dumps(COMPOSER)):
     emit("error", "composer_not_found")
@@ -88,7 +109,9 @@ chk = js("""
   const text = box ? (box.innerText || box.value || '').trim() : null;
   return { empty: text === '', url: location.href };
 """)
-tid = chk["url"].split("/direct/t/")[1].split("/")[0] if "/direct/t/" in chk.get("url", "") else None
+chk = chk or {}
+url = chk.get("url", "")
+tid = url.split("/direct/t/")[1].split("/")[0] if "/direct/t/" in url else None
 if chk.get("empty"):
     emit("sent", "composer cleared after send", thread_id=tid)
 emit("uncertain", "composer not cleared; verify by re-reading the thread", thread_id=tid)
