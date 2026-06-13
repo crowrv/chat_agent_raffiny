@@ -92,7 +92,10 @@ const log = (...args: unknown[]) => {
   }
 };
 
+const soulPrompt = loadSoulPrompt();
+
 const instructions = [
+  soulPrompt ? `## Personality\n\n${soulPrompt}` : "",
   "## Channel",
   "Telegram messages arrive through the Claude channel envelope from the raffiny channel server. The envelope metadata includes channel_id (the Telegram chat_id), user_id, user_name, ts, message_id, and conversation_id.",
   "Every Telegram-originated turn must end with the reply tool, not plain assistant text. Terminal-facing assistant text is invisible to Telegram users.",
@@ -102,7 +105,7 @@ const instructions = [
   isChatSession
     ? `You are dedicated to Telegram chat ${boundChat}.`
     : "You are the Telegram fallback session. You receive events from every chat that has no dedicated session.",
-].join("\n");
+].filter(Boolean).join("\n");
 
 const mcp = new Server(
   { name: "raffiny", version: "0.1.0" },
@@ -477,6 +480,18 @@ function loadConfig(): Config {
     return JSON.parse(readFileSync(configPath, "utf8")) as Config;
   } catch {
     return { defaultRule: "mention" };
+  }
+}
+
+// Optional persona, injected into the MCP server instructions as ## Personality.
+// Absent SOUL.md -> instructions carry only the channel protocol (unchanged).
+function loadSoulPrompt(): string {
+  try {
+    const path = resolve(projectRoot, "SOUL.md");
+    if (!existsSync(path)) return "";
+    return readFileSync(path, "utf8").trim();
+  } catch {
+    return "";
   }
 }
 
