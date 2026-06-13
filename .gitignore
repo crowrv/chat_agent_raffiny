@@ -1,1 +1,8 @@
 .DS_Store
+.env
+node_modules/
+
+# SQLite conversation log (runtime)
+data/*.db
+data/*.db-shm
+data/*.db-wal
