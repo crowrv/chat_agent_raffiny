@@ -62,9 +62,9 @@ Cancellation and refund processing: always escalate to baker. Do not process in 
 
 ### Allergens
 
-Default kitchen allergens: wheat, dairy, eggs, soy. Cross-contact possible — always disclose this.
+Default kitchen allergens: wheat, dairy, eggs. Cross-contact possible — always disclose this.
 - No gluten-free, vegan, or sugar-free options currently.
-- Nuts handled occasionally — cannot guarantee nut-free.
+- Cakes are nut-free unless otherwise specified.
 - For severe allergies (epi-pen level): decline the order honestly.
 
 ### Servings Guide

@@ -2,7 +2,7 @@
 
 **Business:** Raffin Cake — Korean/Asian-style fresh cream cakes, roll cakes, and desserts
 **Operator:** Single baker (owner-operator)
-**License:** California Cottage Food Operation, Permit #PT0502833
+**License:** California MEHKO (Microenterprise Home Kitchen Operation), Permit #PT0502833 — a separate program from Cottage Food, requiring a health permit, in-person kitchen inspection, and Food Protection Manager Certification
 **Model:** Online order intake → made-to-order → pickup (primary) or delivery (by request)
 **Contact:** business@raffin.studio · www.raffin.studio · IG @raffin_cake
 
@@ -73,7 +73,7 @@ The baker works alone. All production, packaging, communication, and pickup hand
 | Item | Policy |
 |------|--------|
 | Accepted methods | **Zelle** (preferred) and **Venmo** to the business account on file |
-| Deposit | **50% non-refundable deposit** required to confirm the order |
+| Deposit | **50% deposit** required to confirm the custom order |
 | Balance | Remaining 50% due **24 hours before pickup** |
 | Custom cakes over $200 | Full payment due **48 hours before pickup** |
 | Receipts | Send a brief Zelle/Venmo memo: `Raffin Cake — [Order ID]` |
@@ -113,49 +113,12 @@ The baker works alone. All production, packaging, communication, and pickup hand
 - Skip the pickup calendar invite; deliveries are confirmed by email after the baker reviews route + fee.
 
 **Delivery fee guidance (internal):**
-- 0–5 mi: $15
-- 5–15 mi: $25
-- 15–25 mi: $40
-- 25+ mi: case-by-case, generally declined
+- $3/mile with minimum of $25
+- 50+ mi: case-by-case
 
 ---
 
-## 8. Packaging & Labeling (Cottage Food Compliance)
-
-Every cake leaves the kitchen with the legally required cottage food label affixed to the box:
-
-```
-Raffin Cake
-[Campbell, CA — city only on label]
-Made in a Home Kitchen
-CDPH Permit #PT0502833
-
-Product: [e.g., Matcha Strawberry Cream Cake]
-Ingredients: [full list, in descending order by weight]
-Allergens: Contains [milk, eggs, wheat, etc.]
-Net Weight: [oz]
-Date Made: [MM/DD/YYYY]
-```
-
-**Packaging materials:**
-- White cake boxes (sized to cake) with non-slip pad inside
-- Acetate collar for taller cakes
-- Cold pack for pickups longer than 30 min in transit
-- Branded sticker seal on box lid
-
----
-
-## 9. Allergen & Dietary Management
-
-- **Default allergens present in the kitchen:** wheat, dairy, eggs, soy. Cross-contact is possible — disclose this to every customer.
-- **Nuts:** the kitchen handles tree nuts occasionally. Do not claim nut-free.
-- **Gluten-free / vegan:** not currently offered. Politely decline and recommend they explore another bakery.
-- Always ask about allergies in Step 3 of order intake; record in `Allergen Notes` on the order sheet.
-- For severe allergies (epi-pen level), decline the order and explain the cottage food kitchen cannot guarantee allergen-free production.
-
----
-
-## 10. Cancellation & Refund Policy
+## 8. Cancellation & Refund Policy
 
 | Timing | Policy |
 |--------|--------|
@@ -169,7 +132,7 @@ Date Made: [MM/DD/YYYY]
 
 ---
 
-## 11. Customer Communication Standards
+## 9. Customer Communication Standards
 
 - **Response time:** within 24 hours for chat / form / DM; same-day for active orders.
 - **Tone:** warm, personal, craft-focused. Cakes are described in sensory terms (airy, light, fresh).
@@ -190,22 +153,11 @@ The Raffin Data Google Sheet is the source of truth. Per-order row must include:
 
 **Retention:** keep all order rows indefinitely for tax and trend analysis. Customer PII (phone, email, address) is never shared outside the business.
 
-**Production notebook:** the baker keeps a physical notebook with daily production notes (yield, issues, ingredient lots) — minimum 1 year retention per cottage food best practice.
+**Production notebook:** the baker keeps a physical notebook with daily production notes (yield, issues, ingredient lots) — minimum 1 year retention per MEHKO best practice.
 
 ---
 
-## 13. Health, Safety & Licensing
-
-- **California Cottage Food Operation Permit #PT0502833** — keep posted in the kitchen and available on request.
-- **Food Handler Card** — current and on file.
-- Allowed products: shelf-stable AND certain refrigerated products approved under CA Class B cottage food (verify current list with the local environmental health department before adding new SKUs).
-- **Sales channels:** direct-to-consumer only (in-person pickup, customer-initiated delivery). No wholesale to retail / restaurants without an upgraded license.
-- **Kitchen rules:** no pets in the kitchen during production; no household members handling product; dedicated commercial-grade tools where possible.
-- **Annual self-audit:** review permit, label compliance, and recipe cards every January.
-
----
-
-## 14. Escalation — When to Loop in the Baker
+## 10. Escalation — When to Loop in the Baker
 
 The chat agent should escalate to the baker (business@raffin.studio) when:
 
@@ -223,4 +175,4 @@ Escalation message to customer:
 
 ---
 
-*Last updated: 2026-05-24*
+*Last updated: 2026-06-11*

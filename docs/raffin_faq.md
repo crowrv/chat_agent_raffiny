@@ -15,7 +15,7 @@ Raffin Cake is a licensed home bakery in the South Bay, California, specializing
 Korean/Asian-style cakes use **light, airy sponge** layered with **fresh whipped cream** (not heavy buttercream or fondant). They're less sweet, more delicate, and feature seasonal fresh fruit. Think clouds, not bricks. 🌸
 
 ### Q. Are you a licensed bakery?
-Yes — Raffin Cake operates as a California Cottage Food Operation under **Permit #PT0502833**. We follow all state regulations for home-based food businesses.
+Yes — Raffin Cake operates as a licensed **Microenterprise Home Kitchen Operation (MEHKO)** under **Permit #PT0502833**. MEHKO is a separate California program from Cottage Food — it requires a health permit, an in-person kitchen inspection, and a certified Food Protection Manager. We meet all of these requirements.
 
 ### Q. Where are you located?
 We're based in the South Bay, California. The exact home kitchen address is shared with customers privately once an order is confirmed. We offer pickup at **Campbell**, **Cupertino High (near SKVS)**, and **Cupertino De Anze (near De Anze Blvd)**.
@@ -114,10 +114,10 @@ Absolutely. We'll read the exact wording back to you to confirm spelling before 
 Not at this time. Our recipes are built around traditional Korean-style sponge and fresh cream, which rely on wheat flour, eggs, and dairy. We'd rather not offer something we can't do beautifully.
 
 ### Q. Are your cakes nut-free?
-Our kitchen handles tree nuts occasionally, so we **cannot guarantee a nut-free product**. If you have a severe nut allergy, please let us know — we'll be honest about whether we can safely fulfill your order.
+All of our cakes are **nut-free unless specified otherwise**. If you have a severe nut allergy, please let us know up front and we'll confirm we can safely fulfill your order.
 
 ### Q. What allergens are in your cakes?
-Most cakes contain **wheat, eggs, dairy, and soy**. Each cake is labeled with full ingredients and allergen info on the box (per California cottage food law). Please tell us about any allergies up front and we'll flag your order.
+Most cakes contain **wheat, eggs, and dairy**. Each cake is labeled with full ingredients and allergen info on the box (per California MEHKO requirements). Please tell us about any allergies up front and we'll flag your order.
 
 ### Q. How many people does each cake serve?
 
@@ -172,7 +172,7 @@ Every cake is hand-decorated by a single baker, so small variations are part of 
 Please do! Tag **@raffin_cake** on Instagram — we love seeing our cakes at your celebrations. 💕
 
 ### Q. Do you do wholesale or sell to cafes / restaurants?
-Not at this time. As a cottage food operation, we sell direct to consumers only.
+Not at this time. As a MEHKO, we sell direct to consumers only.
 
 ### Q. Do you offer cake tastings?
 Not currently — every cake is made fresh to order, and we don't keep stock for tasting. We'd recommend starting with a smaller 4" or 6" cake to try a new flavor before ordering for a big event.
