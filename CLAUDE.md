@@ -184,7 +184,7 @@ Then:
 - Collect the full delivery address.
 - Collect the desired delivery date and time window.
 - Do **not** quote a delivery fee in chat — defer to the email follow-up.
-- Mark the order as **Pending — delivery requested, needs Raffin team review** in the Sheet (Step 8) and skip Step 7 (the pickup calendar invite); the Raffin team will send the delivery confirmation by email.
+- Flag the order as **Pending — delivery requested, needs Raffin team review** in column V (Lettering & Others) when saving in Step 8, and skip Step 7 (the pickup calendar invite); the Raffin team will send the delivery confirmation by email.
 
 -----
 
@@ -198,7 +198,7 @@ Per the SOP, explain the deposit/payment method (e.g., Zelle, Venmo — refer to
 
 ### ✅ Step 7 — Create Google Calendar Event
 
-> If the pickup was flagged as **out-of-window** in Step 2, **do not auto-create the calendar invite yet** — note in the Sheet that the Raffin team will either send the invite manually or email the customer with next steps. Likewise, if the customer chose **delivery** in Step 5, skip this step entirely; delivery confirmation is handled by the Raffin team via email.
+> If the pickup was flagged as **out-of-window** in Step 2, **do not auto-create the calendar invite yet** — note this in column V (Lettering & Others) when saving in Step 8, so the Raffin team will either send the invite manually or email the customer with next steps. Likewise, if the customer chose **delivery** in Step 5, skip this step entirely; delivery confirmation is handled by the Raffin team via email.
 
 Once the customer confirms the order:
 
@@ -215,34 +215,28 @@ Once the customer confirms the order:
 
 ### 📊 Step 8 — Save Order to Google Sheet
 
-Append a new row to the **Orders tab** in the Raffin Data Google Sheet with the following fields (match the column order in the sheet exactly):
+Append a new row to the **`주문` tab** (the baker's order/sales ledger) via `gws sheets spreadsheets values append` (see "Google Access via the `gws` CLI"). **Always read the live header row first** (`"range":"주문!A1:AB1"`) and match by column position — the layout can change.
 
-```
-Order ID         | Auto-generate: YYYYMMDD-### (e.g., 20260614-001)
-Date Placed      | Today's date
-Customer Name    |
-Phone            |
-Email            |
-Pickup Date      |
-Pickup/Delivery  |
-Delivery Address | (if applicable)
-Cake Type        |
-Size             |
-Sponge Flavor    |
-Cream Flavor     |
-Fruit/Toppings   |
-Design Notes     |
-Message on Cake  |
-Allergen Notes   |
-Reference Images | (URL or "None")
-Total Price      |
-Deposit Amount   |
-Deposit Paid     | No (default — update when payment confirmed)
-Calendar Invite  | Sent / Not Sent
-Confirmation Email | Sent / Not Sent
-Special Notes    |
-Order Status     | Pending
-```
+The tab has 28 columns (A–AB). Fill **only** the columns below; **leave every other column blank.** The blank ones are the baker's internal analytics (`지인여부`, `Special code`, `재방문?`, `Roll`, `Financier`, `DCC`, `Cake`) or price breakdowns the baker reconciles by hand — guessing them corrupts the ledger.
+
+| Col | Header | What the agent writes |
+|-----|--------|------------------------|
+| A | Year | Year of the pickup date |
+| B | Month | Month of the pickup date (number) |
+| C | Week number | ISO week number of the pickup date |
+| D | Order # | Generate `YYMM###` (e.g., `2606001`) — sequence per month |
+| E | order date | Today's date (`M/D/YY`) |
+| F | pickup date | Agreed pickup date (`M/D/YY`) |
+| G | pickup time | Agreed pickup time |
+| H | Customer name | Full name |
+| I | Pickup | Mirror the pickup date (existing sheet convention) |
+| Q | Cake type | Product name from the Product List (English) |
+| R | Size | e.g., `6 inch` |
+| S | # | Quantity (default `1`) |
+| V | Lettering & Others | Cake message **plus** the details that have no column of their own — pack as a short `key: value; …` string: pickup location, phone, email, allergens, design notes, reference-image URL |
+| AB | Received | Agreed total price (e.g., `$66.00`) |
+
+> ⚠️ The `주문` tab has **no** columns for phone, email, allergens, design, deposit status, calendar-invite status, or confirmation-email status. Capture those in column **V (Lettering & Others)** and the confirmation email — do **not** invent columns or write status flags into the sheet. Contact details and deposits are tracked by the baker separately.
 
 After saving, proceed immediately to Step 9.
 
@@ -340,9 +334,7 @@ www.raffin.studio
 Instagram: @raffin_cake
 ```
 
-After sending, update the Google Sheet row:
-
-- Set **Confirmation Email** column → `Sent`
+The BCC to `business@raffin.studio` is your record that the confirmation went out — the `주문` tab has no status column, so there is nothing to write back to the sheet here.
 
 Then tell the customer in chat:
 
@@ -422,7 +414,7 @@ gws sheets spreadsheets values get \
 
 ### Save an order row (Sheets — append)
 
-The live orders tab is named **`주문`**. Read its header row first (`"range":"주문!A1:Z1"`) and match column order exactly before appending.
+The live orders tab is named **`주문`** (28 columns, A–AB). Read its header row first (`"range":"주문!A1:AB1"`) and match column order exactly before appending. See Step 8 for which columns the agent fills vs. leaves blank.
 
 ```
 gws sheets spreadsheets values append \
