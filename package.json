@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "bash run.sh",
+    "restart": "bash restart.sh",
     "hub": "bun run src/hub.ts",
     "channel": "bun run src/channel.ts",
     "typecheck": "tsc --noEmit"
