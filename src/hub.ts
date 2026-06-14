@@ -428,4 +428,7 @@ function shutdown() {
 
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
-process.on("SIGHUP", shutdown);
+// The hub is a persistent, session-independent daemon: ignore SIGHUP so closing
+// the launching terminal (or the Claude session that started it) does not stop
+// it. Stop it explicitly with `./hub.sh stop` (SIGTERM) instead.
+process.on("SIGHUP", () => log("SIGHUP ignored (running as daemon)"));

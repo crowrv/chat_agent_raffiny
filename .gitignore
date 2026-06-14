@@ -12,3 +12,6 @@ data/*.db-wal
 
 # Other tools' configs
 .antigravitycli/
+
+# Retired Python bot — folder kept on disk only for its local secret files
+bot/

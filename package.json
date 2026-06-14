@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "bash run.sh",
     "hub": "bun run src/hub.ts",
     "channel": "bun run src/channel.ts",
     "typecheck": "tsc --noEmit"
