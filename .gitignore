@@ -1,1 +1,14 @@
 .DS_Store
+sensitive
+
+# Bot runtime files & secrets
+bot/.env
+bot/credentials.json
+bot/token.json
+bot/sessions.db
+bot/__pycache__/
+bot/client_secret_*.json
+bot/*oauth*.json
+
+# Other tools' configs
+.antigravitycli/
