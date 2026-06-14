@@ -1,0 +1,70 @@
+# telegram-claude-agent
+
+A Telegram-connected Claude Code agent built on Claude Code's **channel** protocol.
+Same skeleton as the Discord "Argus" agent — the messenger is just an I/O adapter:
+
+```
+Telegram ──getUpdates──▶ hub ──WebSocket──▶ channel server (MCP, inside a Claude session)
+                                                │  notifications/claude/channel  (wakes Claude)
+                                                ▼
+                                          Claude session ──reply tool──▶ sendMessage ──▶ Telegram
+                                                │
+                                                ▼
+                                          SQLite (conversation_events)
+```
+
+## Files (keep the responsibility boundaries)
+
+- `src/hub.ts` — Telegram Bot API `getUpdates` long-polling loop. Normalizes each
+  `message` into a wire event and routes it over WebSocket to the bound session.
+  No messenger policy lives here.
+- `src/channel.ts` — the MCP **channel server**, one per Claude session. Receives
+  hub events, loads recent context, fires `notifications/claude/channel` to wake
+  Claude, exposes the `reply` tool (which calls Telegram `sendMessage`), and logs
+  in/outbound.
+- `src/history.ts` — `bun:sqlite` `conversation_events` table.
+
+## conversation_id
+
+- 1:1 DM → `telegram:chat:<chat_id>`
+- group forum topic → `telegram:chat:<chat_id>:thread:<message_thread_id>`
+
+Preserved on every inbound and outbound path.
+
+## Setup
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`) and copy the token.
+2. `cp .env.example .env` and set `TELEGRAM_BOT_TOKEN`.
+3. `bun install`
+
+## Run
+
+Start the hub (one process):
+
+```bash
+bun run hub
+```
+
+Start a Claude session bound to a chat (the channel server launches via `.mcp.json`):
+
+```bash
+# fallback session: handles every chat with no dedicated session
+TELEGRAM_CHAT=* claude --dangerously-load-development-channels server:raffiny
+
+# or a dedicated session for one chat
+TELEGRAM_CHAT=<chat_id> claude --dangerously-load-development-channels server:raffiny
+```
+
+Then DM the bot, or in a group `@`-mention it / use a `/command`.
+
+## Response policy (`data/config.json`)
+
+- DMs are always answered.
+- Groups answer only on bot-mention or a `/command` (`defaultRule: "mention"`).
+- Force-on per chat: `{"chatRules": {"<chat_id>": "all"}}`.
+
+## Verify without a real bot
+
+`bun run scripts/verify-roundtrip.ts` mocks the Telegram Bot API, runs the real
+hub + real channel server, and drives the channel with an MCP client standing in
+for Claude. It asserts the full round-trip and the SQLite inbound/outbound rows.

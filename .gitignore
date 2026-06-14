@@ -1,14 +1,14 @@
 .DS_Store
 sensitive
 
-# Bot runtime files & secrets
-bot/.env
-bot/credentials.json
-bot/token.json
-bot/sessions.db
-bot/__pycache__/
-bot/client_secret_*.json
-bot/*oauth*.json
+# Node / Bun
+.env
+node_modules/
+
+# SQLite conversation log (runtime)
+data/*.db
+data/*.db-shm
+data/*.db-wal
 
 # Other tools' configs
 .antigravitycli/
