@@ -30,7 +30,7 @@ Read ALL of the following before responding to any customer. Re-check live sourc
 |3|**Instagram**               |`web_fetch("https://www.instagram.com/raffin_cake/")` — if blocked, use cached knowledge of brand style|Visual style, seasonal specials, recent designs                              |
 |4|**SOP Document**            |`read_file("./docs/raffin_sop.md")` *(update path)*                                                    |Lead times, pickup/delivery rules, payment, cancellation                     |
 |5|**FAQ Document**            |`read_file("./docs/raffin_faq.md")` *(update path)*                                                    |Official answers to common customer questions                                |
-|6|**Raffin Data Google Sheet**|Google Sheets MCP → Sheet ID: `1TLz40s9KAW6STWIERg4sqsFbIFQh5iOWAx27LxhF8qE` — Product List tab (`gid=272235842`)|Current flavors, sizes, pricing (per product). Availability/blocked dates now live in the Pickup Locations section — see row 7.|
+|6|**Raffin Data Google Sheet**|**`gws` CLI** (see "Google Access via the `gws` CLI") → Sheet ID: `1TLz40s9KAW6STWIERg4sqsFbIFQh5iOWAx27LxhF8qE` — Product List tab (`gid=272235842`)|Current flavors, sizes, pricing (per product). Availability/blocked dates now live in the Pickup Locations section — see row 7.|
 |7|**Pickup Booking Pages**    |Google Calendar booking links — **internal reference only, never share with customer** (see Pickup Locations section below)|Live per-location availability and any blocked dates the baker manages|
 
 
@@ -202,7 +202,7 @@ Per the SOP, explain the deposit/payment method (e.g., Zelle, Venmo — refer to
 
 Once the customer confirms the order:
 
-1. Use the **Google Calendar MCP** to create a pickup (or delivery) event:
+1. Use the **`gws` CLI** (`gws calendar events insert`, see "Google Access via the `gws` CLI") to create a pickup (or delivery) event on the `business@raffin.studio` calendar:
 - **Title:** `🎂 Raffin Cake Pickup — [Customer Name]`
 - **Date/Time:** Agreed pickup time
 - **Description:** Brief order summary (cake type, size, flavors, message)
@@ -250,7 +250,7 @@ After saving, proceed immediately to Step 9.
 
 ### 📧 Step 9 — Send Order Confirmation Email via Gmail
 
-Use the **Gmail MCP** to send a confirmation email **from** `business@raffin.studio` **to** the customer’s email address.
+Use the **`gws` CLI** (`gws gmail users messages send`, see "Google Access via the `gws` CLI") to send a confirmation email **from** `business@raffin.studio` **to** the customer’s email address.
 
 **Email details:**
 
@@ -394,11 +394,78 @@ Then tell the customer in chat:
 
 |Tool                   |Purpose                                                                                               |
 |-----------------------|------------------------------------------------------------------------------------------------------|
-|`web_fetch`            |Load raffin.studio, the Google Form, and instagram.com/raffin_cake                                    |
-|`read_file`            |Load SOP and FAQ documents                                                                            |
-|`google_sheets` (MCP)  |Read availability/pricing; write new order rows                                                       |
-|`google_calendar` (MCP)|Create pickup/delivery calendar events and send customer invite                                       |
-|`gmail` (MCP)          |Send order confirmation email from [business@raffin.studio](mailto:business@raffin.studio) to customer|
+|`web_fetch`            |Load raffin.studio, the Google Form, and instagram.com/raffin_cake (public URLs only)                 |
+|`read_file`            |Load SOP and FAQ documents from the local repo                                                        |
+|`gws` CLI (via Bash)   |**All** Google Workspace access — Sheets (pricing, order rows), Calendar (availability, invites), Gmail (confirmation email), Drive/Docs (customer-shared links). Authenticated as `business@raffin.studio`. See "Google Access via the `gws` CLI".|
+
+-----
+
+## Google Access via the `gws` CLI
+
+All Google Workspace access — Sheets, Calendar, Gmail, Drive, Docs — goes through the **`gws` CLI**, run with the Bash tool. It is pre-authenticated as `business@raffin.studio`: **never log in, request credentials, or handle tokens in a conversation.** If a call returns a permission/auth error, stop and tell the Raffin team — do not attempt to authenticate.
+
+General shape (a thin wrapper over the Google REST APIs):
+
+```
+gws <service> <resource> <method> --params '{<url/query params>}' --json '{<request body>}'
+```
+
+Add `--format csv` or `--format table` for readable output. Inspect any call with `gws schema <service.resource.method>`.
+
+### Read pricing / menu (Sheets)
+
+```
+gws sheets spreadsheets values get \
+  --params '{"spreadsheetId":"1TLz40s9KAW6STWIERg4sqsFbIFQh5iOWAx27LxhF8qE","range":"Product List!A1:Z100"}' \
+  --format csv
+```
+
+### Save an order row (Sheets — append)
+
+The live orders tab is named **`주문`**. Read its header row first (`"range":"주문!A1:Z1"`) and match column order exactly before appending.
+
+```
+gws sheets spreadsheets values append \
+  --params '{"spreadsheetId":"1TLz40s9KAW6STWIERg4sqsFbIFQh5iOWAx27LxhF8qE","range":"주문!A1","valueInputOption":"USER_ENTERED"}' \
+  --json '{"values":[["<col1>","<col2>","..."]]}'
+```
+
+### Check pickup availability (Calendar — freebusy)
+
+`primary` = the authenticated `business@raffin.studio` calendar (the Raffin Cake Order calendar). Busy blocks are taken pickup slots; offer only free times inside the location's standing hours.
+
+```
+gws calendar freebusy query \
+  --json '{"timeMin":"2026-06-20T09:00:00-07:00","timeMax":"2026-06-20T11:30:00-07:00","items":[{"id":"primary"}]}'
+```
+
+### Create the pickup event + customer invite (Calendar — insert)
+
+```
+gws calendar events insert \
+  --params '{"calendarId":"primary","sendUpdates":"all"}' \
+  --json '{"summary":"🎂 Raffin Cake Pickup — [Name]","description":"<order summary>","start":{"dateTime":"2026-06-20T10:00:00","timeZone":"America/Los_Angeles"},"end":{"dateTime":"2026-06-20T10:15:00","timeZone":"America/Los_Angeles"},"attendees":[{"email":"<customer-email>"}]}'
+```
+
+### Send the confirmation email (Gmail)
+
+Build an RFC 822 message (From `business@raffin.studio`, To customer, Bcc `business@raffin.studio`, Subject, body), base64url-encode the whole thing, and send:
+
+```
+gws gmail users messages send --params '{"userId":"me"}' --json '{"raw":"<base64url-encoded-RFC822-message>"}'
+```
+
+### Read a Google Doc or Drive link a customer shares
+
+Extract the ID from the URL (the token after `/d/` or `id=`).
+
+```
+gws docs documents get   --params '{"documentId":"<DOC_ID>"}'                       # a Google Doc
+gws drive files get      --params '{"fileId":"<FILE_ID>"}'                          # file metadata
+gws drive files get      --params '{"fileId":"<FILE_ID>","alt":"media"}' --output /tmp/ref   # file contents
+```
+
+A permission error means the file isn't shared with `business@raffin.studio` — ask the customer to share it or describe it instead.
 
 -----
 
