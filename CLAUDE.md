@@ -187,7 +187,7 @@ Then:
 - Collect the full delivery address.
 - Collect the desired delivery date and time window.
 - Do **not** quote a delivery fee in chat — defer to the email follow-up.
-- Flag the order as **Pending — delivery requested, needs Raffin team review** in column V (Lettering & Others) when saving in Step 8, and skip Step 7 (the pickup calendar invite); the Raffin team will send the delivery confirmation by email.
+- Flag the order as **Pending — delivery requested, needs Raffin team review** in column AM (Memo) when saving in Step 8, and skip Step 7 (the pickup calendar invite); the Raffin team will send the delivery confirmation by email.
 
 -----
 
@@ -201,7 +201,7 @@ Per the SOP, explain the deposit/payment method (e.g., Zelle, Venmo — refer to
 
 ### ✅ Step 7 — Create Google Calendar Event
 
-> If the pickup was flagged as **out-of-window** in Step 2, **do not auto-create the calendar invite yet** — note this in column V (Lettering & Others) when saving in Step 8, so the Raffin team will either send the invite manually or email the customer with next steps. Likewise, if the customer chose **delivery** in Step 5, skip this step entirely; delivery confirmation is handled by the Raffin team via email.
+> If the pickup was flagged as **out-of-window** in Step 2, **do not auto-create the calendar invite yet** — note this in column AM (Memo) when saving in Step 8, so the Raffin team will either send the invite manually or email the customer with next steps. Likewise, if the customer chose **delivery** in Step 5, skip this step entirely; delivery confirmation is handled by the Raffin team via email.
 
 Once the customer confirms the order:
 
@@ -218,28 +218,30 @@ Once the customer confirms the order:
 
 ### 📊 Step 8 — Save Order to Google Sheet
 
-Append a new row to the **`주문` tab** (the baker's order/sales ledger) via `gws sheets spreadsheets values append` (see "Google Access via the `gws` CLI"). **Always read the live header row first** (`"range":"주문!A1:AB1"`) and match by column position — the layout can change.
+Record the order in the **`주문` tab** (the baker's order/sales ledger). **Always read the live header row first** (`"range":"주문!A1:AN1"`) and match by column position — the layout can change.
 
-The tab has 28 columns (A–AB). Fill **only** the columns below; **leave every other column blank.** The blank ones are the baker's internal analytics (`지인여부`, `Special code`, `재방문?`, `Roll`, `Financier`, `DCC`, `Cake`) or price breakdowns the baker reconciles by hand — guessing them corrupts the ledger.
+**How to write — do NOT plain-append.** The ledger is pre-filled with **formula rows** far below the last order (they show `0` / `#N/A` / `12/30/99` because their inputs are blank). A plain `values append` would orphan the row beneath hundreds of formula rows and bypass the baker's formulas. Instead:
+1. Find the **first empty-input row** (the first row where column `E`/`H` is blank).
+2. Write **only the input cells** in that row with `gws sheets spreadsheets values batchUpdate` (`valueInputOption: USER_ENTERED`). Leave the formula cells alone so they compute.
+
+**Formula columns — never write to these** (they auto-compute from your inputs): `A Year`, `B Month`, `C Week number`, `D Order #` (auto-increments — do **not** generate an ID yourself), `I Pickup`, the customer lookups (`J 지인여부`, `M Roll`, `N Financier`, `O DCC`, `P Cake`), and the **price** columns `W Regular`/`X Special` (look up `Q`&`R` in the Product List) plus the `Y`/`Z`/`AA` add-on charges. `#N/A` in the lookup columns is normal for a new customer.
+
+**Input columns the agent writes:**
 
 | Col | Header | What the agent writes |
 |-----|--------|------------------------|
-| A | Year | Year of the pickup date |
-| B | Month | Month of the pickup date (number) |
-| C | Week number | ISO week number of the pickup date |
-| D | Order # | Generate `YYMM###` (e.g., `2606001`) — sequence per month |
-| E | order date | Today's date (`M/D/YY`) |
+| E | order date | Today's date (`M/D/YY`) — drives Year/Month/Week/Order# |
 | F | pickup date | Agreed pickup date (`M/D/YY`) |
 | G | pickup time | Agreed pickup time |
 | H | Customer name | Full name |
-| I | Pickup | Mirror the pickup date (existing sheet convention) |
 | Q | Cake type | Product name from the Product List (English) |
 | R | Size | e.g., `6 inch` |
 | S | # | Quantity (default `1`) |
-| V | Lettering & Others | Cake message **plus** the details that have no column of their own — pack as a short `key: value; …` string: pickup location, phone, email, allergens, design notes, reference-image URL |
-| AB | Received | Agreed total price (e.g., `$66.00`) |
+| V | Lettering & Others | Boolean: **`TRUE` if the customer requested custom lettering**, **`FALSE` if not.** This is a numeric flag that feeds the `AA = V*3` lettering charge — **never** put text here. |
+| AM | Memo | The custom lettering message text (e.g., `Hello, World! — lettering across the top`). Leave blank if no lettering. |
+| AB | Received | **Leave EMPTY until the deposit is paid and the booking is confirmed.** This column means money actually received — the baker fills it on payment. The order total auto-computes in column `W`. |
 
-> ⚠️ The `주문` tab has **no** columns for phone, email, allergens, design, deposit status, calendar-invite status, or confirmation-email status. Capture those in column **V (Lettering & Others)** and the confirmation email — do **not** invent columns or write status flags into the sheet. Contact details and deposits are tracked by the baker separately.
+> ⚠️ The `주문` tab has **no** columns for phone, email, allergens, design, deposit status, calendar-invite status, or confirmation-email status. Capture the cake **message** in column **AM (Memo)**; capture everything else (phone, email, allergens, design, reference images) in the **confirmation email** only — do **not** invent columns or write status flags into the sheet. Contact details and deposits are tracked by the baker separately.
 
 After saving, proceed immediately to Step 9.
 
@@ -415,14 +417,19 @@ gws sheets spreadsheets values get \
   --format csv
 ```
 
-### Save an order row (Sheets — append)
+### Save an order row (Sheets — write into the first empty-input row)
 
-The live orders tab is named **`주문`** (28 columns, A–AB). Read its header row first (`"range":"주문!A1:AB1"`) and match column order exactly before appending. See Step 8 for which columns the agent fills vs. leaves blank.
+The live orders tab is named **`주문`**. It is a **formula-driven ledger** pre-filled with formula rows, so **do not `append`** — find the first empty-input row (first blank `E`/`H`) and `batchUpdate` only the input cells, letting the formulas compute Year/Month/Week/Order#/price. Read the header first (`"range":"주문!A1:AN1"`). See Step 8 for exactly which columns are inputs vs. formulas.
 
 ```
-gws sheets spreadsheets values append \
-  --params '{"spreadsheetId":"1TLz40s9KAW6STWIERg4sqsFbIFQh5iOWAx27LxhF8qE","range":"주문!A1","valueInputOption":"USER_ENTERED"}' \
-  --json '{"values":[["<col1>","<col2>","..."]]}'
+gws sheets spreadsheets values batchUpdate \
+  --params '{"spreadsheetId":"1TLz40s9KAW6STWIERg4sqsFbIFQh5iOWAx27LxhF8qE"}' \
+  --json '{"valueInputOption":"USER_ENTERED","data":[
+    {"range":"주문!E<row>:H<row>","values":[["<order date>","<pickup date>","<pickup time>","<name>"]]},
+    {"range":"주문!Q<row>:S<row>","values":[["<cake type>","<size>","<qty>"]]},
+    {"range":"주문!V<row>","values":[["TRUE or FALSE — custom lettering?"]]},
+    {"range":"주문!AM<row>","values":[["<lettering message, if any>"]]}
+  ]}'
 ```
 
 ### Check pickup availability (Calendar — freebusy)

@@ -145,11 +145,13 @@ The baker works alone. All production, packaging, communication, and pickup hand
 
 ## 12. Record Keeping
 
-The Raffin Data Google Sheet is the source of truth. Per-order row must include:
+The Raffin Data Google Sheet (`주문` tab) is the source of truth. It is a **formula-driven ledger** — the agent writes only the input cells of the first empty row and the formulas compute the rest. Per-order the agent fills:
 
-`Order ID · Date Placed · Customer Name · Phone · Email · Pickup Date · Pickup or Delivery · Address · Cake Type · Size · Sponge · Cream · Toppings · Design Notes · Message on Cake · Allergens · Reference Images · Total · Deposit Amount · Deposit Paid · Calendar Invite · Confirmation Email · Special Notes · Order Status`
+`order date · pickup date · pickup time · Customer name · Cake type · Size · Qty · Lettering? (TRUE/FALSE in col V) · Lettering message (col AM "Memo")`
 
-**Order ID format:** `YYYYMMDD-###` (e.g., `20260524-001`) — date is the pickup date, sequence is per day.
+- **Order ID auto-generates** in column D via formula (`YYMM###`, e.g. `2606003`) — do not hand-generate it.
+- **Total auto-computes** in column W from the Product List. **Column AB "Received" stays EMPTY until the deposit is paid and the booking is confirmed** — it records money actually in hand, which the baker fills on payment.
+- The sheet has **no columns** for phone, email, address, allergens, design, or reference images. Those live in the **confirmation email** (and the baker's separate customer registry), never the order row.
 
 **Retention:** keep all order rows indefinitely for tax and trend analysis. Customer PII (phone, email, address) is never shared outside the business.
 
