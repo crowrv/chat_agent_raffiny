@@ -53,16 +53,22 @@ dedicated profile).
 2. **Read the full thread** for context:
    `IG_OPEN="<name>" docs/functions/ig-relay/ig.sh read_inbox`
    (returns recent `messages` plus the stable `thread_id` to reuse with `IG_THREAD=<id>`).
-3. **Draft + forward to the baker.** Draft a suggested reply in Raffin's voice
-   (grounded in the knowledge sources), then forward it to the **baker's Telegram**
-   (chat `BAKER_TELEGRAM_CHAT_ID`) with the channel `reply` tool — include the
-   sender name, the customer's message, and your suggested reply, and ask the baker
-   to **approve, edit, or skip**.
-4. **Baker reviews on Telegram.** Approve as-is, send an edited version, or skip.
-5. **Send to Instagram (approved only).** On approve/edit, post the final text:
-   `IG_OPEN="<name>" IG_TEXT="<approved text>" docs/functions/ig-relay/ig.sh send_reply`
-   (or `IG_THREAD=<id> IG_TEXT=...`). On skip, do nothing. Never send without the
-   baker's explicit approval.
+3. **Draft + register.** Draft a suggested reply in Raffin's voice (grounded in the
+   knowledge sources), then register it so it can be tracked across the review:
+   `IG_DRAFT_NAME="<name>" IG_DRAFT_MESSAGE="<customer msg>" IG_DRAFT_REPLY="<draft>" bun run scripts/ig-drafts.ts add`
+   → returns a short **draft id** (e.g. `IG-7`). The store lets multiple drafts be in
+   flight at once without correlation guesswork.
+4. **Forward to the baker for review.** Use the channel `reply` tool to the baker's
+   Telegram (`BAKER_TELEGRAM_CHAT_ID`) with the **draft id**, sender name, customer
+   message, and suggested reply; tell the baker to respond `approve IG-7`,
+   `edit IG-7 <text>`, or `skip IG-7`.
+5. **Send to Instagram (approved only).** When a baker message references a draft id,
+   recover the IG name with `bun run scripts/ig-drafts.ts get <id>`. On approve/edit:
+   `IG_OPEN="<name>" IG_TEXT="<final text>" docs/functions/ig-relay/ig.sh send_reply`,
+   then `IG_DRAFT_FINAL="<final text>" bun run scripts/ig-drafts.ts resolve <id> sent`.
+   On skip: `bun run scripts/ig-drafts.ts resolve <id> skipped` and send nothing. Never
+   send without an approved draft id. (`bun run scripts/ig-drafts.ts list --pending`
+   shows drafts still awaiting the baker.)
 6. **Confirm** by re-reading the thread (`IG_THREAD=<id> ig.sh read_inbox`) and
    checking the message appears correctly. Never assume a send worked from `status` alone.
 

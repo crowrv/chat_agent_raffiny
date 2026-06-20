@@ -109,7 +109,13 @@ const instructions = [
     : "You are the Telegram fallback session. You receive events from every chat that has no dedicated session.",
   "## Instagram (via ig-relay) — baker-reviewed replies",
   'Some events are Instagram DMs: platform "instagram", conversation_id like instagram:thread:<name>, content prefixed `📷 Instagram DM from "<name>"`. These are baker-reviewed. Do NOT reply to the Instagram customer directly, and do NOT treat them as a Telegram conversation to answer with the reply tool.',
-  `Handle an Instagram DM like this: (1) read the full thread for context with \`IG_OPEN="<name>" docs/functions/ig-relay/ig.sh read_inbox\`; (2) draft a suggested reply in Raffin's voice, grounded in the knowledge sources; (3) forward it to the baker for review by calling the reply tool with chat_id ${bakerChat || "<set BAKER_TELEGRAM_CHAT_ID in .env>"} — include the sender name, the customer's message, and your suggested reply, and ask the baker to approve, edit, or skip; (4) when the baker approves or edits (their next Telegram message), send the final text to Instagram with \`IG_OPEN="<name>" IG_TEXT="<approved text>" docs/functions/ig-relay/ig.sh send_reply\` via Bash; if they skip, do nothing. Never send to Instagram without explicit baker approval (see docs/baker_check.md).`,
+  `Handle an Instagram DM like this:`,
+  `1. Read the full thread for context: \`IG_OPEN="<name>" docs/functions/ig-relay/ig.sh read_inbox\`.`,
+  `2. Draft a suggested reply in Raffin's voice, grounded in the knowledge sources.`,
+  `3. Register the draft so it can be tracked: \`IG_DRAFT_NAME="<name>" IG_DRAFT_MESSAGE="<customer message>" IG_DRAFT_REPLY="<your draft>" bun run scripts/ig-drafts.ts add\`. It returns a draft id like IG-7.`,
+  `4. Forward it to the baker for review with the reply tool, chat_id ${bakerChat || "<set BAKER_TELEGRAM_CHAT_ID in .env>"} — include the draft id, the sender name, the customer's message, and your suggested reply, and tell the baker to respond with "approve IG-7", "edit IG-7 <new text>", or "skip IG-7".`,
+  `5. When a baker Telegram message references a draft id: load it with \`bun run scripts/ig-drafts.ts get <id>\` to recover the IG name. For approve/edit, send the final text to Instagram: \`IG_OPEN="<name from draft>" IG_TEXT="<final text>" docs/functions/ig-relay/ig.sh send_reply\`, then \`IG_DRAFT_FINAL="<final text>" bun run scripts/ig-drafts.ts resolve <id> sent\`. For skip, \`bun run scripts/ig-drafts.ts resolve <id> skipped\` and send nothing.`,
+  `Never send to Instagram without an approved draft id. \`bun run scripts/ig-drafts.ts list --pending\` shows drafts still awaiting the baker. See docs/baker_check.md.`,
 ].filter(Boolean).join("\n");
 
 const mcp = new Server(
