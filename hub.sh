@@ -6,7 +6,10 @@
 # to whichever sessions have bound themselves. Start it once; open as many
 # Claude sessions against it as you like. Closing a session never stops the hub.
 #
-#   ./hub.sh start     # start the daemon if not already running
+# Starting the hub also starts the Instagram feeder (src/ig-source.ts), which
+# polls IG DMs into the hub. Set IG_SOURCE=0 to start the hub without it.
+#
+#   ./hub.sh start     # start the daemon (+ IG feeder) if not already running
 #   ./hub.sh stop      # stop the daemon
 #   ./hub.sh restart   # stop then start
 #   ./hub.sh status    # is it running?
@@ -20,15 +23,56 @@ PID_FILE="/tmp/telegram-hub.pid"
 LOG_FILE="/tmp/telegram-claude-hub.log"
 BOOT_LOG="/tmp/telegram-hub-boot.log"
 
+# Instagram feeder (src/ig-source.ts): polls IG DMs and pushes them to the hub's
+# /ingest endpoint. Started alongside the hub by default; set IG_SOURCE=0 to skip.
+IG_SOURCE="${IG_SOURCE:-1}"
+IG_PID_FILE="/tmp/ig-source.pid"
+IG_LOG="/tmp/ig-source.log"
+
 is_running() {
   [ -f "$PID_FILE" ] || return 1
   local pid; pid="$(cat "$PID_FILE" 2>/dev/null || true)"
   [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
 }
 
+ig_running() {
+  [ -f "$IG_PID_FILE" ] || return 1
+  local pid; pid="$(cat "$IG_PID_FILE" 2>/dev/null || true)"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+start_ig_source() {
+  if [ "$IG_SOURCE" = "0" ]; then
+    echo "Skipping IG feeder (IG_SOURCE=0)."
+    return 0
+  fi
+  if ig_running; then
+    echo "IG feeder already running (pid $(cat "$IG_PID_FILE"))."
+    return 0
+  fi
+  # Clear any stray feeder, then launch detached so it outlives this shell.
+  pkill -f "src/ig-source.ts" 2>/dev/null || true
+  nohup bun run src/ig-source.ts >> "$IG_LOG" 2>&1 < /dev/null &
+  local pid=$!
+  disown "$pid" 2>/dev/null || true
+  echo "$pid" > "$IG_PID_FILE"
+  echo "IG feeder started (pid $pid). Logs: $IG_LOG"
+}
+
+stop_ig_source() {
+  pkill -f "src/ig-source.ts" 2>/dev/null || true
+  if ig_running; then
+    local pid; pid="$(cat "$IG_PID_FILE")"
+    echo "Stopping IG feeder (pid $pid) ..."
+    kill "$pid" 2>/dev/null || true
+  fi
+  rm -f "$IG_PID_FILE"
+}
+
 start() {
   if is_running; then
     echo "Hub already running (pid $(cat "$PID_FILE"))."
+    start_ig_source
     return 0
   fi
   command -v bun >/dev/null 2>&1 || { echo "ERROR: bun not found. brew install oven-sh/bun/bun" >&2; exit 1; }
@@ -44,6 +88,7 @@ start() {
   for _ in $(seq 1 30); do
     if curl -s "http://127.0.0.1:4713/" >/dev/null 2>&1; then
       echo "Hub ready (pid $pid). Logs: $LOG_FILE"
+      start_ig_source
       return 0
     fi
     if ! kill -0 "$pid" 2>/dev/null; then break; fi
@@ -56,6 +101,7 @@ start() {
 }
 
 stop() {
+  stop_ig_source
   if ! is_running; then
     echo "Hub is not running."
     rm -f "$PID_FILE"
@@ -72,6 +118,11 @@ status() {
     echo "Hub RUNNING (pid $(cat "$PID_FILE")) on 127.0.0.1:4713"
   else
     echo "Hub STOPPED"
+  fi
+  if ig_running; then
+    echo "IG feeder RUNNING (pid $(cat "$IG_PID_FILE"))"
+  else
+    echo "IG feeder STOPPED"
   fi
 }
 
