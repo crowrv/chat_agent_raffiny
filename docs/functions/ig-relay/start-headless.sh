@@ -20,6 +20,9 @@ set -euo pipefail
 
 PORT="${IG_HEADLESS_PORT:-9334}"
 PROFILE="${IG_HEADLESS_PROFILE:-$HOME/.browser-harness-ig}"
+# Instagram only renders the DM conversation-list panel above ~1200px wide; a
+# narrow window collapses to just the message pane and read_inbox sees 0 rows.
+WINDOW="${IG_WINDOW_SIZE:-1400,900}"
 
 GUI=0
 for arg in "$@"; do
@@ -65,12 +68,14 @@ if [[ $GUI -eq 1 ]]; then
   echo "launching IG profile with GUI (one-time login). Close the window when done."
   "$CHROME" --remote-debugging-port="$PORT" \
     --user-data-dir="$PROFILE" --no-first-run --no-default-browser-check \
+    --window-size="$WINDOW" \
     https://www.instagram.com/accounts/login/ \
     >/tmp/ig-chrome.log 2>&1 &
   echo "pid=$! on ${PORT} (GUI)"
 else
   "$CHROME" --headless=new --remote-debugging-port="$PORT" \
     --user-data-dir="$PROFILE" --no-first-run --no-default-browser-check \
+    --window-size="$WINDOW" \
     >/tmp/ig-chrome.log 2>&1 &
   echo "launched ig headless chrome pid=$! on ${PORT}"
 fi

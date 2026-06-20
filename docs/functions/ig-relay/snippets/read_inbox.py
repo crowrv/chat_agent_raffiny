@@ -70,7 +70,10 @@ ROWS_JS = """
     const r = b.getBoundingClientRect();
     const txt = (b.innerText || '').trim();
     if (img && txt && r.height > 40 && r.height < 130 && r.left < 470 && r.width > 150) {
-      const lines = txt.split('\\n').map(s => s.trim()).filter(Boolean);
+      // Drop "Active"/"Active now"/"Active 1m ago" presence badges so they don't
+      // get mistaken for the conversation name (lines[0]).
+      const raw = txt.split('\\n').map(s => s.trim()).filter(Boolean);
+      const lines = raw.filter(s => !/^active\\b/i.test(s));
       rows.push({ name: lines[0] || '', preview: lines.slice(1).join(' '),
                   x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) });
     }

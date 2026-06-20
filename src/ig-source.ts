@@ -71,8 +71,9 @@ async function readInbox(): Promise<{ page_status: string; rows: Row[] } | null>
 function isInbound(preview: string): boolean {
   const p = preview.trim();
   if (!p) return false;
-  if (/^you:/i.test(p)) return false;
-  if (/^(active now|seen|typing)/i.test(p)) return false;
+  if (/^you[: ]/i.test(p)) return false;          // our own outgoing ("You:", "You sent …")
+  if (/^active /i.test(p)) return false;           // presence ("Active 1m ago", "Active 17h ago")
+  if (/^(seen|typing)/i.test(p)) return false;     // status lines
   return true;
 }
 
