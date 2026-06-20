@@ -30,7 +30,14 @@ type State = { previews: Record<string, string> };
 function loadState(): State | null {
   if (!existsSync(STATE_FILE)) return null;
   try {
-    return JSON.parse(readFileSync(STATE_FILE, "utf8")) as State;
+    const s = JSON.parse(readFileSync(STATE_FILE, "utf8")) as State;
+    // Migrate baselines written before the age-strip fix (previews stored WITH the
+    // "· 27w" suffix) so the first poll doesn't compare stripped-vs-unstripped and
+    // replay every thread once.
+    for (const name of Object.keys(s.previews ?? {})) {
+      s.previews[name] = stripAge(s.previews[name]);
+    }
+    return s;
   } catch {
     return null;
   }
@@ -64,6 +71,16 @@ async function readInbox(): Promise<{ page_status: string; rows: Row[] } | null>
   } catch {
     return null;
   }
+}
+
+// Instagram renders a relative age in each inbox row ("· 27w", "· 3m", "· 1h").
+// That suffix is part of the row's innerText, so it rides along in `preview` — and
+// it MUTATES as real time passes (1m→3m, 26w→27w) with no new message. Comparing
+// the raw preview therefore treats an age rollover as "changed" and replays old,
+// already-completed threads. Strip the trailing "· <age>" so dedup keys on the
+// actual message text only.
+function stripAge(preview: string): string {
+  return preview.replace(/\s·\s(?:\d+\s*[smhdwy]|just now|now)\b.*$/i, "").trim();
 }
 
 // A row counts as new inbound activity when its preview changed and it isn't the
@@ -112,12 +129,13 @@ async function poll(state: State, firstRun: boolean) {
   }
   for (const row of res.rows ?? []) {
     if (!row?.name) continue;
+    const key = stripAge(row.preview);
     const prev = state.previews[row.name];
-    const changed = prev !== row.preview;
-    state.previews[row.name] = row.preview;
+    const changed = prev !== key;
+    state.previews[row.name] = key;
     // First run only records a baseline so we don't replay the whole inbox.
     if (firstRun) continue;
-    if (changed && isInbound(row.preview)) await ingest(row);
+    if (changed && isInbound(key)) await ingest(row);
   }
   saveState(state);
 }
