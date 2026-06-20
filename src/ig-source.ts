@@ -7,7 +7,10 @@
 // NOT sent here — the session sends them via ig-relay's send_reply after
 // approval (see docs/baker_check.md). Sending is never automated.
 //
-// Requires the dedicated ig-relay Chrome to be up on port 9334:
+// The dedicated ig-relay Chrome (port 9334) is launched HEADLESS automatically —
+// this feeder runs start-headless.sh on startup and re-launches it if the browser
+// dies, so it can run unattended (e.g. auto-started by ./hub.sh). You only need a
+// one-time interactive login to seed the cookies the headless session reuses:
 //   docs/functions/ig-relay/start-headless.sh --gui   # log into Instagram once
 //
 // Run:  bun run src/ig-source.ts   (or: bun run ig-source)
@@ -18,6 +21,8 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const IG_SH = resolve(projectRoot, "docs/functions/ig-relay/ig.sh");
+const START_HEADLESS = resolve(projectRoot, "docs/functions/ig-relay/start-headless.sh");
+const IG_PORT = process.env.IG_HEADLESS_PORT || "9334";
 const HUB = `http://${process.env.TELEGRAM_HUB_HOST || "127.0.0.1"}:${process.env.TELEGRAM_HUB_PORT || "4713"}`;
 const POLL_SECONDS = Number(process.env.IG_POLL_SECONDS) || 120;
 const STATE_FILE = process.env.IG_STATE_FILE || "/tmp/ig-source-state.json";
@@ -48,6 +53,30 @@ function saveState(s: State) {
   } catch (e) {
     log("WARN: could not persist state:", e);
   }
+}
+
+// Is the dedicated ig-relay Chrome answering CDP on its debug port?
+async function chromeUp(): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${IG_PORT}/json/version`);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Make sure the dedicated Chrome is up, launching it HEADLESS if not. start-headless.sh
+// is idempotent (exits 0 if CDP already answers), so calling it every tick is cheap.
+// Returns false when the browser couldn't be brought up — the caller skips this tick.
+async function ensureChrome(): Promise<boolean> {
+  if (await chromeUp()) return true;
+  log(`IG Chrome not up on :${IG_PORT} — launching headless …`);
+  try {
+    await $`${START_HEADLESS}`.quiet();
+  } catch (e: any) {
+    log("start-headless.sh failed:", e?.stderr?.toString?.() || e?.message || e);
+  }
+  return await chromeUp();
 }
 
 // Run `ig.sh read_inbox` and parse the JSON after the ==BH_PAYLOAD== marker.
@@ -121,6 +150,10 @@ async function ingest(row: Row) {
 }
 
 async function poll(state: State, firstRun: boolean) {
+  if (!(await ensureChrome())) {
+    log(`IG Chrome unavailable on :${IG_PORT} — retrying next tick.`);
+    return;
+  }
   const res = await readInbox();
   if (!res) return; // transient (Chrome down / parse fail) — try again next tick
   if (res.page_status !== "ok") {
