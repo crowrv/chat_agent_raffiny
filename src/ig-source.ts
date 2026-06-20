@@ -23,6 +23,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const IG_SH = resolve(projectRoot, "docs/functions/ig-relay/ig.sh");
 const START_HEADLESS = resolve(projectRoot, "docs/functions/ig-relay/start-headless.sh");
 const IG_PORT = process.env.IG_HEADLESS_PORT || "9334";
+const IG_PROFILE = process.env.IG_HEADLESS_PROFILE || `${process.env.HOME}/.browser-harness-ig`;
 const HUB = `http://${process.env.TELEGRAM_HUB_HOST || "127.0.0.1"}:${process.env.TELEGRAM_HUB_PORT || "4713"}`;
 const POLL_SECONDS = Number(process.env.IG_POLL_SECONDS) || 120;
 const STATE_FILE = process.env.IG_STATE_FILE || "/tmp/ig-source-state.json";
@@ -65,10 +66,53 @@ async function chromeUp(): Promise<boolean> {
   }
 }
 
-// Make sure the dedicated Chrome is up, launching it HEADLESS if not. start-headless.sh
-// is idempotent (exits 0 if CDP already answers), so calling it every tick is cheap.
-// Returns false when the browser couldn't be brought up — the caller skips this tick.
+// Inspect the MAIN Chrome browser process bound to our debug port + profile and
+// report whether it was launched headless. A leftover GUI instance (from the
+// one-time `--gui` login) also answers CDP, so chromeUp() alone can't tell them
+// apart — and a GUI window gets raised to the foreground on every poll. Skips the
+// renderer/gpu/utility children (they carry --type=); only the browser process
+// has the --headless flag. Returns "headless", "gui", or "none".
+async function chromeMode(): Promise<"headless" | "gui" | "none"> {
+  let out: string;
+  try {
+    out = await $`ps -axww -o command=`.text();
+  } catch {
+    return "none";
+  }
+  for (const line of out.split("\n")) {
+    if (!line.includes(`--remote-debugging-port=${IG_PORT}`)) continue;
+    if (!line.includes(IG_PROFILE)) continue;
+    if (line.includes("--type=")) continue; // child process, not the browser
+    return line.includes("--headless") ? "headless" : "gui";
+  }
+  return "none";
+}
+
+// Kill every Chrome process bound to our debug port (browser + children). The
+// match pattern deliberately omits the leading "--": pkill -f treats an argument
+// starting with "--" as end-of-options, which would make the match a silent no-op.
+async function killChrome(): Promise<void> {
+  try {
+    await $`pkill -f ${`remote-debugging-port=${IG_PORT}`}`.quiet();
+  } catch {
+    // pkill exits non-zero when nothing matched — fine.
+  }
+}
+
+// Make sure a HEADLESS dedicated Chrome is serving the debug port, launching it
+// via the idempotent start-headless.sh if needed. If a GUI instance is holding
+// the port (leftover from the manual login), replace it with headless so the
+// feeder runs unattended without a window popping up every poll — the login
+// cookies persist in the profile dir, so no re-login is required.
+// Returns false when the browser couldn't be brought up — caller skips this tick.
 async function ensureChrome(): Promise<boolean> {
+  const mode = await chromeMode();
+  if (mode === "headless" && (await chromeUp())) return true;
+  if (mode === "gui") {
+    log("IG Chrome is running in GUI mode — replacing it with headless to save resources.");
+    await killChrome();
+    for (let i = 0; i < 20 && (await chromeUp()); i++) await Bun.sleep(250);
+  }
   if (await chromeUp()) return true;
   log(`IG Chrome not up on :${IG_PORT} — launching headless …`);
   try {
