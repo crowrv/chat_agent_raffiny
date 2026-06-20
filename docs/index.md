@@ -33,7 +33,7 @@ A separate, on-demand tool (not part of the ordering agent): reads Instagram DMs
 
 | Page | Summary |
 |------|---------|
-| [`functions/ig-relay/README.md`](./functions/ig-relay/README.md) | Overview of the manual IG DM assistant and the read → approve → send loop. Includes the **hub integration** (`src/ig-source.ts` feeds Instagram DMs into the hub, inbound-only + approval-gated send). |
+| [`functions/ig-relay/README.md`](./functions/ig-relay/README.md) | The IG DM assistant: **auto-polled inbound** (`src/ig-source.ts` → hub) with **baker-reviewed replies** (draft forwarded to the baker's Telegram; sent to IG only on approval). |
 | [`functions/ig-relay/CLAUDE.md`](./functions/ig-relay/CLAUDE.md) | The ig-relay contract: scope, safety rules, and the exact manual workflow. |
 | [`superpowers/specs/2026-05-29-ig-relay-manual-dm-assistant-design.md`](./superpowers/specs/2026-05-29-ig-relay-manual-dm-assistant-design.md) | Design doc for the redesign from an always-on Discord worker to a manual assistant. |
 | [`superpowers/plans/2026-05-29-ig-relay-manual-dm-assistant.md`](./superpowers/plans/2026-05-29-ig-relay-manual-dm-assistant.md) | Task-by-task implementation plan for the redesign. |

@@ -2,16 +2,18 @@
 
 ## Scope
 
-This folder owns a **manual, on-demand Instagram DM assistant**. There is no
-background process. When the user asks (e.g. "any new IG DMs?"), Claude:
+This folder owns an **auto-polling Instagram DM intake with baker-reviewed replies**.
 
-1. Reads the user's Instagram DMs live through `browser-harness`.
-2. Summarizes them and helps draft replies in chat.
-3. Sends a reply back to Instagram **only after the user explicitly approves the
-   exact text** for a specific thread.
+- **Inbound is automated.** The hub feeder (`src/ig-source.ts`) polls the IG inbox
+  on an interval and pushes each new inbound DM into the hub, which routes it to a
+  Claude session — the same path Telegram messages take. Reading needs no approval.
+- **Replies are baker-reviewed, never auto-sent.** For each IG DM the session drafts
+  a suggested reply in Raffin's voice, forwards the customer's message + the draft to
+  the **baker's Telegram** for review, and sends to Instagram **only after the baker
+  approves** the exact text (via `ig.sh send_reply`).
 
-It is **not** responsible for: background polling, notifications, Discord or any
-other transport, bulk/unsolicited messaging, or creating/warming IG accounts.
+It is **not** responsible for: auto-replying to Instagram, bulk/unsolicited
+messaging, Discord or any other transport, or creating/warming IG accounts.
 
 ## Owned Files
 
@@ -36,24 +38,33 @@ other transport, bulk/unsolicited messaging, or creating/warming IG accounts.
 - `start-headless.sh`: isolated Chrome launcher (port 9334, profile
   `~/.browser-harness-ig`, `--gui` for a visible window / one-time login).
 
-## The Flow
+## The Flow (auto-poll → baker review → approved send)
 
-Run snippets via `ig.sh` (it pins to the dedicated profile). Paths below are
-relative to this folder.
+Inbound is automated by `src/ig-source.ts`; the session handles draft + send.
+Paths below are relative to repo root. Run snippets via `ig.sh` (it pins to the
+dedicated profile).
 
-1. **Read the inbox.** `ig.sh read_inbox`. Parse the JSON after `==BH_PAYLOAD==`.
-   If `page_status` is not `ok`, do NOT guess — the session needs attention
-   (re-run `start-headless.sh --gui` and log in).
-2. **Summarize** the `rows` (name + preview) in chat. Let the user pick one.
-3. **Read the thread** with `IG_OPEN="<name>" ig.sh read_inbox` to open it by name
-   and see recent `messages` (the output's `thread_id` is the stable id you can
-   reuse with `IG_THREAD=<id>` afterward). Draft a reply together.
-4. **Approval gate.** Show the user the EXACT reply text and the target thread.
-   Wait for an explicit "send". Never auto-send.
-5. **Send.** `IG_OPEN="<name>" IG_TEXT="<approved text>" ig.sh send_reply`
-   (or `IG_THREAD=<id> IG_TEXT=...` if you already have the id).
-6. **Confirm** by re-reading the thread (step 3, by `IG_THREAD=<id>`) and checking
-   the message appears correctly. Never assume a send worked from `status` alone.
+1. **Auto-poll (inbound).** `src/ig-source.ts` runs `ig.sh read_inbox` every
+   `IG_POLL_SECONDS` (default 120s) and POSTs each NEW inbound row to the hub's
+   `/ingest` as `platform: "instagram"`, `conversation_id: instagram:thread:<name>`.
+   The bound Claude session receives it (content prefixed `📷 Instagram DM from "<name>"`).
+   If `read_inbox` returns `page_status != ok`, the feeder skips that cycle — the
+   session needs attention (re-run `start-headless.sh --gui` and log in).
+2. **Read the full thread** for context:
+   `IG_OPEN="<name>" docs/functions/ig-relay/ig.sh read_inbox`
+   (returns recent `messages` plus the stable `thread_id` to reuse with `IG_THREAD=<id>`).
+3. **Draft + forward to the baker.** Draft a suggested reply in Raffin's voice
+   (grounded in the knowledge sources), then forward it to the **baker's Telegram**
+   (chat `BAKER_TELEGRAM_CHAT_ID`) with the channel `reply` tool — include the
+   sender name, the customer's message, and your suggested reply, and ask the baker
+   to **approve, edit, or skip**.
+4. **Baker reviews on Telegram.** Approve as-is, send an edited version, or skip.
+5. **Send to Instagram (approved only).** On approve/edit, post the final text:
+   `IG_OPEN="<name>" IG_TEXT="<approved text>" docs/functions/ig-relay/ig.sh send_reply`
+   (or `IG_THREAD=<id> IG_TEXT=...`). On skip, do nothing. Never send without the
+   baker's explicit approval.
+6. **Confirm** by re-reading the thread (`IG_THREAD=<id> ig.sh read_inbox`) and
+   checking the message appears correctly. Never assume a send worked from `status` alone.
 
 ## Browser Configuration
 
@@ -78,9 +89,9 @@ Use only for quick tests; it is not isolated from the user's browsing.
 
 | Rule | Detail |
 |------|--------|
-| ✅ Reading is free | Reading DMs needs no approval. |
-| ✅ Sending needs per-message approval | Always show exact text + target thread; wait for explicit "send". Never auto-reply. |
-| ❌ No bulk / unsolicited DMs | Only reply to existing threads the user points at. One message at a time. |
+| ✅ Reading is free & auto-polled | Inbound reading needs no approval; `src/ig-source.ts` polls it automatically. |
+| ✅ Sending needs baker approval | Forward the message + suggested reply to the baker's Telegram; send to IG only after the baker approves the exact text. Never auto-reply. |
+| ❌ No bulk / unsolicited DMs | Only reply to existing threads, one message at a time, after baker approval. |
 | ✅ Confirm by re-reading | A send is confirmed only when the message appears in the thread on re-read. |
 | ✅ Stop on auth walls | If `page_status` is `auth_required`/`challenge`/`two_factor`, stop and ask the user to log in. Don't type credentials. |
 | ❌ No secrets in output | Never print cookies/tokens/credentials. |

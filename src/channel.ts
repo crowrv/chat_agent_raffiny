@@ -67,6 +67,8 @@ const API = `${API_BASE}/bot${TELEGRAM_BOT_TOKEN}`;
 
 const boundChat = process.env.TELEGRAM_CHAT?.trim();
 const isChatSession = !!boundChat && boundChat !== "*";
+// Telegram chat the session forwards Instagram DMs to for baker review.
+const bakerChat = process.env.BAKER_TELEGRAM_CHAT_ID?.trim() || "";
 
 let hubWs: WebSocket | undefined;
 let reconnect = true;
@@ -105,8 +107,9 @@ const instructions = [
   isChatSession
     ? `You are dedicated to Telegram chat ${boundChat}.`
     : "You are the Telegram fallback session. You receive events from every chat that has no dedicated session.",
-  "## Instagram (via ig-relay)",
-  'Some events are Instagram DMs: platform "instagram", conversation_id like instagram:thread:<name>, and the content is prefixed to say so. Do NOT use the reply tool for these — it only sends to Telegram. To engage, read the full thread with `IG_OPEN="<user_name>" docs/functions/ig-relay/ig.sh read_inbox`, draft a reply, then send with `IG_OPEN="<user_name>" IG_TEXT="<approved text>" docs/functions/ig-relay/ig.sh send_reply` — only after explicit approval (see docs/baker_check.md). Reading is free; never auto-send to Instagram.',
+  "## Instagram (via ig-relay) — baker-reviewed replies",
+  'Some events are Instagram DMs: platform "instagram", conversation_id like instagram:thread:<name>, content prefixed `📷 Instagram DM from "<name>"`. These are baker-reviewed. Do NOT reply to the Instagram customer directly, and do NOT treat them as a Telegram conversation to answer with the reply tool.',
+  `Handle an Instagram DM like this: (1) read the full thread for context with \`IG_OPEN="<name>" docs/functions/ig-relay/ig.sh read_inbox\`; (2) draft a suggested reply in Raffin's voice, grounded in the knowledge sources; (3) forward it to the baker for review by calling the reply tool with chat_id ${bakerChat || "<set BAKER_TELEGRAM_CHAT_ID in .env>"} — include the sender name, the customer's message, and your suggested reply, and ask the baker to approve, edit, or skip; (4) when the baker approves or edits (their next Telegram message), send the final text to Instagram with \`IG_OPEN="<name>" IG_TEXT="<approved text>" docs/functions/ig-relay/ig.sh send_reply\` via Bash; if they skip, do nothing. Never send to Instagram without explicit baker approval (see docs/baker_check.md).`,
 ].filter(Boolean).join("\n");
 
 const mcp = new Server(

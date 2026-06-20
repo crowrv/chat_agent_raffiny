@@ -101,7 +101,13 @@ It returns candidate payments with a **confidence**:
 **Agent:** give city only; the exact Campbell address is shared **after the deposit is confirmed** (checkpoint 1).
 **Baker / system:** the address goes out with the confirmation once payment is verified ([[raffin_sop]] §4).
 
-## 11. Anything not answerable from the knowledge sources
+## 11. Instagram DM replies
+
+**Trigger:** an Instagram DM arrives (auto-polled by `src/ig-source.ts` into the hub).
+**Agent:** read the full thread, draft a suggested reply in Raffin's voice, and forward the customer's message + the draft to the baker's Telegram (`BAKER_TELEGRAM_CHAT_ID`) — asking to approve, edit, or skip.
+**Baker decides:** approve as-is, send an edited version, or skip. The agent posts to Instagram (`ig.sh send_reply`) **only** on approve/edit — never auto-sends. See [`functions/ig-relay/CLAUDE.md`](./functions/ig-relay/CLAUDE.md).
+
+## 12. Anything not answerable from the knowledge sources
 
 **Trigger:** any question the agent can't answer from [[raffin_sop]], [[raffin_faq]], or the live sheet.
 **Agent:** *"Great question — let me check and get right back to you."* Then escalate.

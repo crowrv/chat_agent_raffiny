@@ -50,10 +50,10 @@ only reveals a thread id once a conversation is opened, so target by name
 
 ## Hub integration (optional)
 
-ig-relay can feed the [hub](../../../src/hub.ts) so Instagram DMs flow to a Claude
-session alongside Telegram. It stays **inbound-only + approval-gated send** — the
-feeder never sends; the session replies via the `ig.sh send_reply` flow above
-after explicit approval (see [`../../baker_check.md`](../../baker_check.md)).
+ig-relay feeds the [hub](../../../src/hub.ts) so Instagram DMs flow to a Claude
+session alongside Telegram. Inbound is **auto-polled**; replies are **baker-reviewed
+over Telegram** — the feeder never sends, and the session posts to Instagram only
+after the baker approves the exact text (see [`../../baker_check.md`](../../baker_check.md)).
 
 ```bash
 # 1. Bring up the dedicated IG Chrome and log in (one time)
@@ -72,10 +72,12 @@ event to the hub's `/ingest` endpoint with `platform: "instagram"` and
 `conversation_id: instagram:thread:<name>`. The first run records a baseline so
 existing threads aren't replayed. Reading is free; sending is never automated.
 
-The bound session sees the IG event (the content is prefixed `📷 Instagram DM
-from "<name>"`), reads the full thread with `IG_OPEN="<name>" ig.sh read_inbox`,
-and — only after approval — replies with `ig.sh send_reply`. It must **not** use
-the Telegram reply tool for these.
+The bound session sees the IG event (content prefixed `📷 Instagram DM from
+"<name>"`), reads the full thread with `IG_OPEN="<name>" ig.sh read_inbox`, drafts
+a suggested reply, and **forwards the message + draft to the baker's Telegram**
+(`BAKER_TELEGRAM_CHAT_ID`) for review. Only after the baker approves (or edits)
+does it post the final text with `ig.sh send_reply`. It must **not** answer the
+Instagram customer directly or via the Telegram reply tool.
 
 ## Layout
 
