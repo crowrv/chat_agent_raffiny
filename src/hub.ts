@@ -12,7 +12,7 @@ type SessionInfo = {
 };
 
 type TelegramWireEvent = {
-  platform: "telegram";
+  platform: "telegram" | "instagram";
   chat_id: string;
   chat_type: string;
   chat_title?: string;
@@ -105,6 +105,9 @@ Bun.serve<{ remoteAddress?: string }>({
   fetch(req, server) {
     if (server.upgrade(req, { data: { remoteAddress: server.requestIP(req)?.address } })) return;
     const url = new URL(req.url);
+    if (req.method === "POST" && url.pathname === "/ingest") {
+      return handleIngest(req);
+    }
     if (url.pathname === "/debug/route-event" && process.env.TELEGRAM_HUB_DEBUG_INJECT === "1") {
       return handleDebugRouteEvent(req);
     }
@@ -302,6 +305,45 @@ function handleSessionMessage(ws: Bun.ServerWebSocket<unknown>, data: any) {
   if (data.type === "log") {
     const info = sessionInfo.get(ws);
     log(`[${info?.label ?? "unknown"}] ${data.message}`);
+  }
+}
+
+// Generic ingestion endpoint: any local source (e.g. the Instagram feeder in
+// src/ig-source.ts) POSTs a normalized wire event here and the hub routes it
+// exactly like a Telegram message. Localhost-bound, so the bind address is the
+// trust boundary. Requires chat_id + content; everything else gets sane defaults.
+async function handleIngest(req: Request): Promise<Response> {
+  try {
+    const body = await req.json() as Partial<TelegramWireEvent>;
+    if (!body.chat_id || !body.content) {
+      return Response.json({ ok: false, error: "chat_id and content are required" }, { status: 400 });
+    }
+    const now = Date.now();
+    const platform = body.platform === "instagram" ? "instagram" : "telegram";
+    const chatId = String(body.chat_id);
+    const event: TelegramWireEvent = {
+      platform,
+      chat_id: chatId,
+      chat_type: body.chat_type || "dm",
+      chat_title: body.chat_title,
+      message_thread_id: body.message_thread_id,
+      conversation_id: body.conversation_id || `${platform}:chat:${chatId}`,
+      message_id: body.message_id || `${platform}-${now}`,
+      content: body.content,
+      created_timestamp: body.created_timestamp || now,
+      is_dm: body.is_dm !== false,
+      mentions_bot: body.mentions_bot !== false,
+      is_command: body.is_command === true,
+      user_id: body.user_id || chatId,
+      user_name: body.user_name || chatId,
+      user_display_name: body.user_display_name || body.user_name || chatId,
+      user_is_bot: false,
+    };
+    log(`[ingest] platform=${platform} chat=${chatId} content=${event.content.slice(0, 100)}`);
+    routeEvent(event);
+    return Response.json({ ok: true, routed: { conversation_id: event.conversation_id } });
+  } catch (err) {
+    return Response.json({ ok: false, error: formatLogArg(err) }, { status: 400 });
   }
 }
 

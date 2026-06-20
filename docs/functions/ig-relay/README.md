@@ -48,6 +48,35 @@ Each snippet prints a `==BH_PAYLOAD==` line followed by one JSON object. Instagr
 only reveals a thread id once a conversation is opened, so target by name
 (`IG_OPEN`) the first time and reuse the returned `thread_id` afterward.
 
+## Hub integration (optional)
+
+ig-relay can feed the [hub](../../../src/hub.ts) so Instagram DMs flow to a Claude
+session alongside Telegram. It stays **inbound-only + approval-gated send** — the
+feeder never sends; the session replies via the `ig.sh send_reply` flow above
+after explicit approval (see [`../../baker_check.md`](../../baker_check.md)).
+
+```bash
+# 1. Bring up the dedicated IG Chrome and log in (one time)
+docs/functions/ig-relay/start-headless.sh --gui
+
+# 2. Start the hub (and a session) as usual
+./hub.sh start          # or ./run.sh
+
+# 3. Start the Instagram feeder — polls the inbox and pushes NEW DMs to the hub
+bun run ig-source       # = bun run src/ig-source.ts
+```
+
+[`src/ig-source.ts`](../../../src/ig-source.ts) polls `ig.sh read_inbox` every
+`IG_POLL_SECONDS` (default 120s), and for each **new** inbound row POSTs a wire
+event to the hub's `/ingest` endpoint with `platform: "instagram"` and
+`conversation_id: instagram:thread:<name>`. The first run records a baseline so
+existing threads aren't replayed. Reading is free; sending is never automated.
+
+The bound session sees the IG event (the content is prefixed `📷 Instagram DM
+from "<name>"`), reads the full thread with `IG_OPEN="<name>" ig.sh read_inbox`,
+and — only after approval — replies with `ig.sh send_reply`. It must **not** use
+the Telegram reply tool for these.
+
 ## Layout
 
 ```

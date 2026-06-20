@@ -17,7 +17,7 @@ import {
 } from "./history.js";
 
 type TelegramWireEvent = {
-  platform: "telegram";
+  platform: "telegram" | "instagram";
   chat_id: string;
   chat_type: string;
   chat_title?: string;
@@ -105,6 +105,8 @@ const instructions = [
   isChatSession
     ? `You are dedicated to Telegram chat ${boundChat}.`
     : "You are the Telegram fallback session. You receive events from every chat that has no dedicated session.",
+  "## Instagram (via ig-relay)",
+  'Some events are Instagram DMs: platform "instagram", conversation_id like instagram:thread:<name>, and the content is prefixed to say so. Do NOT use the reply tool for these — it only sends to Telegram. To engage, read the full thread with `IG_OPEN="<user_name>" docs/functions/ig-relay/ig.sh read_inbox`, draft a reply, then send with `IG_OPEN="<user_name>" IG_TEXT="<approved text>" docs/functions/ig-relay/ig.sh send_reply` — only after explicit approval (see docs/baker_check.md). Reading is free; never auto-send to Instagram.',
 ].filter(Boolean).join("\n");
 
 const mcp = new Server(

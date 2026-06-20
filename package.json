@@ -8,6 +8,7 @@
     "restart": "bash restart.sh",
     "hub": "bun run src/hub.ts",
     "channel": "bun run src/channel.ts",
+    "ig-source": "bun run src/ig-source.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
