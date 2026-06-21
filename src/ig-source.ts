@@ -23,9 +23,14 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const IG_SH = resolve(projectRoot, "docs/functions/ig-relay/ig.sh");
 const START_HEADLESS = resolve(projectRoot, "docs/functions/ig-relay/start-headless.sh");
 const IG_PORT = process.env.IG_HEADLESS_PORT || "9334";
+const IG_PROFILE = process.env.IG_HEADLESS_PROFILE || `${process.env.HOME}/.browser-harness-ig`;
 const HUB = `http://${process.env.TELEGRAM_HUB_HOST || "127.0.0.1"}:${process.env.TELEGRAM_HUB_PORT || "4713"}`;
 const POLL_SECONDS = Number(process.env.IG_POLL_SECONDS) || 120;
 const STATE_FILE = process.env.IG_STATE_FILE || "/tmp/ig-source-state.json";
+// Never treat a row older than this as new inbound. The preview-only dedup can't
+// tell "old message still at the top of the thread" from "new message", so an
+// absolute-age guard is the backstop: a 6-week-old DM can never be ingested as new.
+const MAX_AGE_HOURS = Number(process.env.IG_MAX_AGE_HOURS) || 48;
 
 const log = (...a: unknown[]) => console.error("[ig-source]", ...a);
 
@@ -65,10 +70,53 @@ async function chromeUp(): Promise<boolean> {
   }
 }
 
-// Make sure the dedicated Chrome is up, launching it HEADLESS if not. start-headless.sh
-// is idempotent (exits 0 if CDP already answers), so calling it every tick is cheap.
-// Returns false when the browser couldn't be brought up — the caller skips this tick.
+// Inspect the MAIN Chrome browser process bound to our debug port + profile and
+// report whether it was launched headless. A leftover GUI instance (from the
+// one-time `--gui` login) also answers CDP, so chromeUp() alone can't tell them
+// apart — and a GUI window gets raised to the foreground on every poll. Skips the
+// renderer/gpu/utility children (they carry --type=); only the browser process
+// has the --headless flag. Returns "headless", "gui", or "none".
+async function chromeMode(): Promise<"headless" | "gui" | "none"> {
+  let out: string;
+  try {
+    out = await $`ps -axww -o command=`.text();
+  } catch {
+    return "none";
+  }
+  for (const line of out.split("\n")) {
+    if (!line.includes(`--remote-debugging-port=${IG_PORT}`)) continue;
+    if (!line.includes(IG_PROFILE)) continue;
+    if (line.includes("--type=")) continue; // child process, not the browser
+    return line.includes("--headless") ? "headless" : "gui";
+  }
+  return "none";
+}
+
+// Kill every Chrome process bound to our debug port (browser + children). The
+// match pattern deliberately omits the leading "--": pkill -f treats an argument
+// starting with "--" as end-of-options, which would make the match a silent no-op.
+async function killChrome(): Promise<void> {
+  try {
+    await $`pkill -f ${`remote-debugging-port=${IG_PORT}`}`.quiet();
+  } catch {
+    // pkill exits non-zero when nothing matched — fine.
+  }
+}
+
+// Make sure a HEADLESS dedicated Chrome is serving the debug port, launching it
+// via the idempotent start-headless.sh if needed. If a GUI instance is holding
+// the port (leftover from the manual login), replace it with headless so the
+// feeder runs unattended without a window popping up every poll — the login
+// cookies persist in the profile dir, so no re-login is required.
+// Returns false when the browser couldn't be brought up — caller skips this tick.
 async function ensureChrome(): Promise<boolean> {
+  const mode = await chromeMode();
+  if (mode === "headless" && (await chromeUp())) return true;
+  if (mode === "gui") {
+    log("IG Chrome is running in GUI mode — replacing it with headless to save resources.");
+    await killChrome();
+    for (let i = 0; i < 20 && (await chromeUp()); i++) await Bun.sleep(250);
+  }
   if (await chromeUp()) return true;
   log(`IG Chrome not up on :${IG_PORT} — launching headless …`);
   try {
@@ -110,6 +158,24 @@ async function readInbox(): Promise<{ page_status: string; rows: Row[] } | null>
 // actual message text only.
 function stripAge(preview: string): string {
   return preview.replace(/\s·\s(?:\d+\s*[smhdwy]|just now|now)\b.*$/i, "").trim();
+}
+
+// Parse the relative age Instagram renders in the row ("· 6w", "· 3m", "· just now")
+// into hours. Returns null when no age token is present (then we don't gate on it).
+// IG units: s=seconds, m=minutes, h=hours, d=days, w=weeks, y=years.
+function ageHours(preview: string): number | null {
+  const m = preview.match(/·\s*(?:(\d+)\s*([smhdwy])|(just now|now))\b/i);
+  if (!m) return null;
+  if (m[3]) return 0; // "just now" / "now"
+  const per: Record<string, number> = { s: 1 / 3600, m: 1 / 60, h: 1, d: 24, w: 168, y: 8760 };
+  return Number(m[1]) * (per[m[2].toLowerCase()] ?? Infinity);
+}
+
+// Recent enough to be considered new inbound? An unparseable age is allowed
+// through (rare; better than silently dropping a genuine message).
+function isRecent(preview: string): boolean {
+  const h = ageHours(preview);
+  return h === null ? true : h <= MAX_AGE_HOURS;
 }
 
 // A row counts as new inbound activity when its preview changed and it isn't the
@@ -168,7 +234,8 @@ async function poll(state: State, firstRun: boolean) {
     state.previews[row.name] = key;
     // First run only records a baseline so we don't replay the whole inbox.
     if (firstRun) continue;
-    if (changed && isInbound(key)) await ingest(row);
+    if (changed && isInbound(key) && isRecent(row.preview)) await ingest(row);
+    else if (changed && isInbound(key)) log(`skipping stale row from "${row.name}" (age ${ageHours(row.preview)}h > ${MAX_AGE_HOURS}h)`);
   }
   saveState(state);
 }
@@ -180,12 +247,27 @@ async function main() {
   log(`polling Instagram inbox every ${POLL_SECONDS}s → ${HUB}/ingest`);
   if (firstRun) log("first run: recording a baseline (no replay of existing threads)");
 
+  // Reentrancy guard: a slow read (headless IG) can outlast the poll interval. Two
+  // overlapping ticks each spin up ig.sh, which collide on the shared browser-harness
+  // daemon socket (/tmp/bu-ig.sock) — that read then fails and the tick bails before
+  // saveState, leaving the dedup baseline stale. Skip a tick while one is in flight.
+  let inFlight = false;
+  const tick = async (isFirst: boolean) => {
+    if (inFlight) {
+      log("previous poll still running — skipping this tick");
+      return;
+    }
+    inFlight = true;
+    try {
+      await poll(state, isFirst);
+    } finally {
+      inFlight = false;
+    }
+  };
+
   // Prime the baseline immediately, then poll on the interval.
-  await poll(state, firstRun);
-  let baseliningDone = true;
-  setInterval(() => void poll(state, false), POLL_SECONDS * 1000);
-  // Keep the event loop alive.
-  void baseliningDone;
+  await tick(firstRun);
+  setInterval(() => void tick(false), POLL_SECONDS * 1000);
 }
 
 main();
