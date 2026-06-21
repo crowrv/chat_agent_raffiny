@@ -27,6 +27,10 @@ const IG_PROFILE = process.env.IG_HEADLESS_PROFILE || `${process.env.HOME}/.brow
 const HUB = `http://${process.env.TELEGRAM_HUB_HOST || "127.0.0.1"}:${process.env.TELEGRAM_HUB_PORT || "4713"}`;
 const POLL_SECONDS = Number(process.env.IG_POLL_SECONDS) || 120;
 const STATE_FILE = process.env.IG_STATE_FILE || "/tmp/ig-source-state.json";
+// Never treat a row older than this as new inbound. The preview-only dedup can't
+// tell "old message still at the top of the thread" from "new message", so an
+// absolute-age guard is the backstop: a 6-week-old DM can never be ingested as new.
+const MAX_AGE_HOURS = Number(process.env.IG_MAX_AGE_HOURS) || 48;
 
 const log = (...a: unknown[]) => console.error("[ig-source]", ...a);
 
@@ -156,6 +160,24 @@ function stripAge(preview: string): string {
   return preview.replace(/\s·\s(?:\d+\s*[smhdwy]|just now|now)\b.*$/i, "").trim();
 }
 
+// Parse the relative age Instagram renders in the row ("· 6w", "· 3m", "· just now")
+// into hours. Returns null when no age token is present (then we don't gate on it).
+// IG units: s=seconds, m=minutes, h=hours, d=days, w=weeks, y=years.
+function ageHours(preview: string): number | null {
+  const m = preview.match(/·\s*(?:(\d+)\s*([smhdwy])|(just now|now))\b/i);
+  if (!m) return null;
+  if (m[3]) return 0; // "just now" / "now"
+  const per: Record<string, number> = { s: 1 / 3600, m: 1 / 60, h: 1, d: 24, w: 168, y: 8760 };
+  return Number(m[1]) * (per[m[2].toLowerCase()] ?? Infinity);
+}
+
+// Recent enough to be considered new inbound? An unparseable age is allowed
+// through (rare; better than silently dropping a genuine message).
+function isRecent(preview: string): boolean {
+  const h = ageHours(preview);
+  return h === null ? true : h <= MAX_AGE_HOURS;
+}
+
 // A row counts as new inbound activity when its preview changed and it isn't the
 // business's own outgoing message ("You: …") or a non-message status line.
 function isInbound(preview: string): boolean {
@@ -212,7 +234,8 @@ async function poll(state: State, firstRun: boolean) {
     state.previews[row.name] = key;
     // First run only records a baseline so we don't replay the whole inbox.
     if (firstRun) continue;
-    if (changed && isInbound(key)) await ingest(row);
+    if (changed && isInbound(key) && isRecent(row.preview)) await ingest(row);
+    else if (changed && isInbound(key)) log(`skipping stale row from "${row.name}" (age ${ageHours(row.preview)}h > ${MAX_AGE_HOURS}h)`);
   }
   saveState(state);
 }
@@ -224,12 +247,27 @@ async function main() {
   log(`polling Instagram inbox every ${POLL_SECONDS}s → ${HUB}/ingest`);
   if (firstRun) log("first run: recording a baseline (no replay of existing threads)");
 
+  // Reentrancy guard: a slow read (headless IG) can outlast the poll interval. Two
+  // overlapping ticks each spin up ig.sh, which collide on the shared browser-harness
+  // daemon socket (/tmp/bu-ig.sock) — that read then fails and the tick bails before
+  // saveState, leaving the dedup baseline stale. Skip a tick while one is in flight.
+  let inFlight = false;
+  const tick = async (isFirst: boolean) => {
+    if (inFlight) {
+      log("previous poll still running — skipping this tick");
+      return;
+    }
+    inFlight = true;
+    try {
+      await poll(state, isFirst);
+    } finally {
+      inFlight = false;
+    }
+  };
+
   // Prime the baseline immediately, then poll on the interval.
-  await poll(state, firstRun);
-  let baseliningDone = true;
-  setInterval(() => void poll(state, false), POLL_SECONDS * 1000);
-  // Keep the event loop alive.
-  void baseliningDone;
+  await tick(firstRun);
+  setInterval(() => void tick(false), POLL_SECONDS * 1000);
 }
 
 main();
