@@ -46,15 +46,21 @@ if not TEXT or not (OPEN or THREAD):
     emit("error", "IG_TEXT is required, plus one of IG_OPEN or IG_THREAD")
 
 # Navigate: direct to a known thread, else to the inbox (for open-by-name).
+# Reuse the daemon's single attached tab via goto_url (Page.navigate) instead of
+# new_tab(): new_tab() calls Target.activateTarget, which makes this --headless=new
+# Chrome the frontmost macOS app and STEALS keyboard focus from whatever the user
+# is typing; it also leaked a fresh tab per call. This is a dedicated user-less IG
+# profile, so there's no user work for goto to clobber. capture_screenshot() below
+# still forces layout (without OS activation).
 if THREAD:
     target = THREAD if THREAD.startswith("http") \
         else "https://www.instagram.com/direct/t/" + THREAD.strip("/") + "/"
-    new_tab(target)
+    goto_url(target)
 else:
-    new_tab(INBOX_URL)
+    goto_url(INBOX_URL)
 wait_for_load()
 time.sleep(2.0)
-capture_screenshot()  # force foreground layout so getBoundingClientRect is valid
+capture_screenshot()  # force layout so getBoundingClientRect is valid (does NOT activate the window)
 
 guard = js("""
   const url = location.href;

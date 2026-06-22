@@ -91,15 +91,21 @@ MSGS_JS = """
 """
 
 # Navigate: direct to a known thread, else to the inbox (for list or open-by-name).
+# Reuse the daemon's single attached tab via goto_url (Page.navigate) instead of
+# new_tab(): new_tab() calls Target.activateTarget every poll, which makes this
+# --headless=new Chrome the frontmost macOS app and STEALS keyboard focus from
+# whatever the user is typing (every 120s); it also leaked a fresh tab per poll.
+# This is a dedicated user-less IG profile, so there's no user work for goto to
+# clobber. capture_screenshot() below still forces layout (without OS activation).
 if THREAD:
     target = THREAD if THREAD.startswith("http") \
         else "https://www.instagram.com/direct/t/" + THREAD.strip("/") + "/"
-    new_tab(target)
+    goto_url(target)
 else:
-    new_tab(INBOX_URL)
+    goto_url(INBOX_URL)
 wait_for_load()
 time.sleep(2.0)
-capture_screenshot()  # force foreground layout so getBoundingClientRect is valid
+capture_screenshot()  # force layout so getBoundingClientRect is valid (does NOT activate the window)
 
 st = js(STATUS_JS)
 mode = "thread" if THREAD else ("open" if OPEN else "inbox")
