@@ -4,13 +4,14 @@
 
 This folder owns an **auto-polling Instagram DM intake with baker-reviewed replies**.
 
-- **Inbound is automated.** The hub feeder (`src/ig-source.ts`) polls the IG inbox
-  on an interval and pushes each new inbound DM into the hub, which routes it to a
-  Claude session — the same path Telegram messages take. Reading needs no approval.
+- **Inbound is explicitly started, then automated.** The hub feeder
+  (`src/ig-source.ts`, usually via `./fleet.sh start-ig`) polls the IG inbox on an
+  interval and pushes each new inbound DM into the hub, which routes it to the
+  review Claude session. Reading needs no approval.
 - **Replies are baker-reviewed, never auto-sent.** For each IG DM the session drafts
   a suggested reply in Raffin's voice, forwards the customer's message + the draft to
-  the **baker's Telegram** for review, and sends to Instagram **only after the baker
-  approves** the exact text (via `ig.sh send_reply`).
+  the **Telegram review channel** for review, and sends to Instagram **only after
+  the baker approves** the exact text (via `ig.sh send_reply`).
 
 It is **not** responsible for: auto-replying to Instagram, bulk/unsolicited
 messaging, Discord or any other transport, or creating/warming IG accounts.
@@ -58,10 +59,11 @@ dedicated profile).
    `IG_DRAFT_NAME="<name>" IG_DRAFT_MESSAGE="<customer msg>" IG_DRAFT_REPLY="<draft>" bun run scripts/ig-drafts.ts add`
    → returns a short **draft id** (e.g. `IG-7`). The store lets multiple drafts be in
    flight at once without correlation guesswork.
-4. **Forward to the baker for review.** Use the channel `reply` tool to the baker's
-   Telegram (`BAKER_TELEGRAM_CHAT_ID`) with the **draft id**, sender name, customer
-   message, and suggested reply; tell the baker to respond `approve IG-7`,
-   `edit IG-7 <text>`, or `skip IG-7`.
+4. **Forward to the baker for review.** Use the channel `reply` tool to the
+   Telegram review chat (`RAFFIN_REVIEW_TELEGRAM_CHAT_ID`, with
+   `BAKER_TELEGRAM_CHAT_ID` kept as a legacy alias) with the **draft id**, sender
+   name, customer message, and suggested reply; tell the baker to respond
+   `approve IG-7`, `edit IG-7 <text>`, or `skip IG-7`.
 5. **Send to Instagram (approved only).** When a baker message references a draft id,
    recover the IG name with `bun run scripts/ig-drafts.ts get <id>`. On approve/edit:
    `IG_OPEN="<name>" IG_TEXT="<final text>" docs/functions/ig-relay/ig.sh send_reply`,
@@ -95,7 +97,7 @@ Use only for quick tests; it is not isolated from the user's browsing.
 
 | Rule | Detail |
 |------|--------|
-| ✅ Reading is free & auto-polled | Inbound reading needs no approval; `src/ig-source.ts` polls it automatically. |
+| ✅ Reading is free after explicit start | Inbound reading needs no approval once `./fleet.sh start-ig` starts `src/ig-source.ts`. |
 | ✅ Sending needs baker approval | Forward the message + suggested reply to the baker's Telegram; send to IG only after the baker approves the exact text. Never auto-reply. |
 | ❌ No bulk / unsolicited DMs | Only reply to existing threads, one message at a time, after baker approval. |
 | ✅ Confirm by re-reading | A send is confirmed only when the message appears in the thread on re-read. |

@@ -5,30 +5,21 @@
 import { appendFileSync, existsSync, readFileSync, renameSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  parseRaffinSessionRole,
+  routingCandidates,
+  validateRoutingConfig,
+  type ChannelWireEvent,
+  type RaffinSessionRole,
+} from "./routing.js";
 
 type SessionInfo = {
   chatId?: string;
+  role?: RaffinSessionRole;
   label?: string;
 };
 
-type TelegramWireEvent = {
-  platform: "telegram" | "instagram";
-  chat_id: string;
-  chat_type: string;
-  chat_title?: string;
-  message_thread_id?: string;
-  conversation_id: string;
-  message_id: string;
-  content: string;
-  created_timestamp: number;
-  is_dm: boolean;
-  mentions_bot: boolean;
-  is_command: boolean;
-  user_id: string;
-  user_name: string;
-  user_display_name: string;
-  user_is_bot: boolean;
-};
+type TelegramWireEvent = ChannelWireEvent;
 
 // Minimal slices of the Bot API types this hub actually reads.
 type TgUser = { id: number; is_bot: boolean; first_name: string; last_name?: string; username?: string };
@@ -91,8 +82,18 @@ if (!HUB_ID) {
 
 const API_BASE = process.env.TELEGRAM_API_BASE || "https://api.telegram.org";
 const API = `${API_BASE}/bot${TELEGRAM_BOT_TOKEN}`;
+const REVIEW_CHAT_ID = process.env.RAFFIN_REVIEW_TELEGRAM_CHAT_ID?.trim()
+  || process.env.BAKER_TELEGRAM_CHAT_ID?.trim()
+  || undefined;
+const OPS_CHAT_ID = process.env.RAFFIN_OPS_TELEGRAM_CHAT_ID?.trim() || undefined;
+const routingConfigError = validateRoutingConfig({ reviewChatId: REVIEW_CHAT_ID, opsChatId: OPS_CHAT_ID });
+if (routingConfigError) {
+  console.error(`[telegram-hub] ERROR: ${routingConfigError}`);
+  process.exit(1);
+}
 
 const sessions = new Map<string, Bun.ServerWebSocket<unknown>>();
+const roleSessions = new Map<RaffinSessionRole, Bun.ServerWebSocket<unknown>>();
 const sessionInfo = new WeakMap<Bun.ServerWebSocket<unknown>, SessionInfo>();
 let fallbackWs: Bun.ServerWebSocket<unknown> | undefined;
 
@@ -108,10 +109,13 @@ Bun.serve<{ remoteAddress?: string }>({
     if (req.method === "POST" && url.pathname === "/ingest") {
       return handleIngest(req);
     }
+    if (url.pathname === "/health") {
+      return Response.json(hubHealth());
+    }
     if (url.pathname === "/debug/route-event" && process.env.TELEGRAM_HUB_DEBUG_INJECT === "1") {
       return handleDebugRouteEvent(req);
     }
-    return Response.json({ ok: true, name: "telegram-claude-hub" });
+    return Response.json(hubHealth());
   },
   websocket: {
     open(ws) {
@@ -151,6 +155,7 @@ let running = true;
 
 const sweepInterval = setInterval(() => {
   pruneSessions();
+  pruneRoleSessions();
   if (fallbackWs && fallbackWs.readyState !== WebSocket.OPEN) {
     fallbackWs = undefined;
     log("[sweep] pruned dead fallback");
@@ -259,17 +264,21 @@ function detectCommand(m: TgMessage, content: string): boolean {
   return true;
 }
 
-function routeEvent(event: TelegramWireEvent) {
+function routeEvent(event: TelegramWireEvent): { routed: true; target: string } | { routed: false } {
   const payload = JSON.stringify({ type: "event", event });
-  if (safeSend(sessions.get(event.chat_id), payload, `chat:${event.chat_id}`)) {
-    debugRoute(event, `chat:${event.chat_id}`);
-    return;
-  }
-  if (safeSend(fallbackWs, payload, "fallback")) {
-    debugRoute(event, "fallback");
-    return;
+  for (const target of routingCandidates(event, { reviewChatId: REVIEW_CHAT_ID, opsChatId: OPS_CHAT_ID })) {
+    const ws = target.kind === "role"
+      ? roleSessions.get(target.role)
+      : target.kind === "chat"
+        ? sessions.get(target.chatId)
+        : fallbackWs;
+    if (safeSend(ws, payload, target.label)) {
+      debugRoute(event, target.label);
+      return { routed: true, target: target.label };
+    }
   }
   log(`(unrouted) chat=${event.chat_id} | ${event.user_name}: ${event.content.slice(0, 60)}`);
+  return { routed: false };
 }
 
 function debugRoute(event: TelegramWireEvent, target: string) {
@@ -279,6 +288,23 @@ function debugRoute(event: TelegramWireEvent, target: string) {
 }
 
 function handleSessionMessage(ws: Bun.ServerWebSocket<unknown>, data: any) {
+  if (data.type === "bind-role") {
+    if (!checkInstanceId(ws, data, "bind-role")) return;
+    const role = parseRaffinSessionRole(data.role);
+    if (!role) {
+      log(`WARN: bind-role invalid role=${data.role ?? "missing"}, ignored`);
+      safeSend(ws, JSON.stringify({ type: "error", message: "invalid-role-session" }), "invalid-role-session");
+      return;
+    }
+    const prev = roleSessions.get(role);
+    if (rejectDuplicateBind(ws, prev, `role:${role}`, "duplicate-role-session")) return;
+    roleSessions.set(role, ws);
+    const label = data.label || role;
+    sessionInfo.set(ws, { role, chatId: data.chatId, label });
+    log(`Bound role: ${label}${data.chatId ? ` (${data.chatId})` : ""}`);
+    return;
+  }
+
   if (data.type === "bind-chat") {
     if (!checkInstanceId(ws, data, "bind-chat")) return;
     if (!data.chatId) {
@@ -340,8 +366,11 @@ async function handleIngest(req: Request): Promise<Response> {
       user_is_bot: false,
     };
     log(`[ingest] platform=${platform} chat=${chatId} content=${event.content.slice(0, 100)}`);
-    routeEvent(event);
-    return Response.json({ ok: true, routed: { conversation_id: event.conversation_id } });
+    const route = routeEvent(event);
+    if (!route.routed) {
+      return Response.json({ ok: false, error: "unrouted", conversation_id: event.conversation_id }, { status: 503 });
+    }
+    return Response.json({ ok: true, routed: { conversation_id: event.conversation_id, target: route.target } });
   } catch (err) {
     return Response.json({ ok: false, error: formatLogArg(err) }, { status: 400 });
   }
@@ -373,8 +402,8 @@ async function handleDebugRouteEvent(req: Request): Promise<Response> {
       user_display_name: body.user_display_name || "Debug User",
       user_is_bot: false,
     };
-    routeEvent(event);
-    return Response.json({ ok: true, routed: event });
+    const route = routeEvent(event);
+    return Response.json({ ok: route.routed, routed: event, target: route.routed ? route.target : undefined }, { status: route.routed ? 200 : 503 });
   } catch (err) {
     return Response.json({ ok: false, error: formatLogArg(err) }, { status: 400 });
   }
@@ -416,11 +445,33 @@ function safeSend(ws: Bun.ServerWebSocket<unknown> | undefined, payload: string,
   }
 }
 
+function hubHealth() {
+  return {
+    ok: true,
+    name: "telegram-claude-hub",
+    instance: HUB_ID,
+    projectRoot,
+    roles: {
+      review: roleSessions.get("review")?.readyState === WebSocket.OPEN,
+      ops: roleSessions.get("ops")?.readyState === WebSocket.OPEN,
+    },
+    fallback: fallbackWs?.readyState === WebSocket.OPEN,
+    chats: [...sessions.entries()]
+      .filter(([, ws]) => ws.readyState === WebSocket.OPEN)
+      .map(([chatId]) => chatId),
+  };
+}
+
 function unbindSession(ws: Bun.ServerWebSocket<unknown>) {
   const info = sessionInfo.get(ws);
   if (ws === fallbackWs) {
     fallbackWs = undefined;
     log("Unbound fallback");
+    return;
+  }
+  if (info?.role && roleSessions.get(info.role) === ws) {
+    roleSessions.delete(info.role);
+    log(`Unbound role: ${info.label || info.role}`);
     return;
   }
   if (info?.chatId && sessions.get(info.chatId) === ws) {
@@ -434,6 +485,15 @@ function pruneSessions() {
     if (ws.readyState !== WebSocket.OPEN) {
       sessions.delete(key);
       log(`[sweep] pruned dead chat:${key}`);
+    }
+  }
+}
+
+function pruneRoleSessions() {
+  for (const [role, ws] of roleSessions) {
+    if (ws.readyState !== WebSocket.OPEN) {
+      roleSessions.delete(role);
+      log(`[sweep] pruned dead role:${role}`);
     }
   }
 }

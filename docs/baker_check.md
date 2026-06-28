@@ -104,7 +104,7 @@ It returns candidate payments with a **confidence**:
 ## 11. Instagram DM replies
 
 **Trigger:** an Instagram DM arrives (auto-polled by `src/ig-source.ts` into the hub).
-**Agent:** read the full thread, draft a suggested reply in Raffin's voice, and forward the customer's message + the draft to the baker's Telegram (`BAKER_TELEGRAM_CHAT_ID`) — asking to approve, edit, or skip.
+**Agent:** read the full thread, draft a suggested reply in Raffin's voice, and forward the customer's message + the draft to the Telegram review chat (`RAFFIN_REVIEW_TELEGRAM_CHAT_ID`, with `BAKER_TELEGRAM_CHAT_ID` kept as a legacy alias) — asking to approve, edit, or skip.
 **Baker decides:** approve as-is, send an edited version, or skip — responding by the draft id shown (e.g. `approve IG-7`, `edit IG-7 <text>`, `skip IG-7`). The agent posts to Instagram (`ig.sh send_reply`) **only** on approve/edit — never auto-sends. Drafts are tracked in `scripts/ig-drafts.ts` so several can be in flight at once. See [`functions/ig-relay/CLAUDE.md`](./functions/ig-relay/CLAUDE.md).
 
 ## 12. Anything not answerable from the knowledge sources

@@ -1,7 +1,8 @@
-# ig-relay — Manual Instagram DM Assistant
+# ig-relay — Instagram DM Intake
 
-On-demand helper that reads your Instagram DMs through `browser-harness` and
-sends replies you approve. No background process, no Discord, no database.
+Helper that reads Instagram DMs through `browser-harness` and sends replies only
+after approval. Intake can run as an explicit background feeder; sending remains
+manual and baker-reviewed.
 
 See `CLAUDE.md` for the full contract, safety rules, and the read→approve→send
 flow Claude follows.
@@ -48,22 +49,23 @@ Each snippet prints a `==BH_PAYLOAD==` line followed by one JSON object. Instagr
 only reveals a thread id once a conversation is opened, so target by name
 (`IG_OPEN`) the first time and reuse the returned `thread_id` afterward.
 
-## Hub integration (optional)
+## Hub integration
 
 ig-relay feeds the [hub](../../../src/hub.ts) so Instagram DMs flow to a Claude
 session alongside Telegram. Inbound is **auto-polled**; replies are **baker-reviewed
-over Telegram** — the feeder never sends, and the session posts to Instagram only
-after the baker approves the exact text (see [`../../baker_check.md`](../../baker_check.md)).
+over the Telegram review channel** — the feeder never sends, and the review
+session posts to Instagram only after the baker approves the exact text (see
+[`../../baker_check.md`](../../baker_check.md)).
 
 ```bash
 # 1. Bring up the dedicated IG Chrome and log in (one time)
 docs/functions/ig-relay/start-headless.sh --gui
 
-# 2. Start the hub (and a session) as usual
-./hub.sh start          # or ./run.sh
+# 2. Start the Raffin fleet
+./fleet.sh start
 
-# 3. Start the Instagram feeder — polls the inbox and pushes NEW DMs to the hub
-bun run ig-source       # = bun run src/ig-source.ts
+# 3. Start the Instagram feeder explicitly
+./fleet.sh start-ig
 ```
 
 [`src/ig-source.ts`](../../../src/ig-source.ts) polls `ig.sh read_inbox` every
@@ -75,9 +77,10 @@ existing threads aren't replayed. Reading is free; sending is never automated.
 The bound session sees the IG event (content prefixed `📷 Instagram DM from
 "<name>"`), reads the full thread with `IG_OPEN="<name>" ig.sh read_inbox`, drafts
 a suggested reply, and **forwards the message + draft to the baker's Telegram**
-(`BAKER_TELEGRAM_CHAT_ID`) for review. Only after the baker approves (or edits)
-does it post the final text with `ig.sh send_reply`. It must **not** answer the
-Instagram customer directly or via the Telegram reply tool.
+review chat (`RAFFIN_REVIEW_TELEGRAM_CHAT_ID`, with `BAKER_TELEGRAM_CHAT_ID` kept
+as a legacy alias). Only after the baker approves (or edits) does it post the
+final text with `ig.sh send_reply`. It must **not** answer the Instagram customer
+directly or via the Telegram reply tool.
 
 ## Layout
 
