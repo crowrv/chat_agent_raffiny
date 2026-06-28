@@ -20,6 +20,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+loadDotEnv(resolve(projectRoot, ".env"));
+
 const IG_SH = resolve(projectRoot, "docs/functions/ig-relay/ig.sh");
 const START_HEADLESS = resolve(projectRoot, "docs/functions/ig-relay/start-headless.sh");
 const IG_PORT = process.env.IG_HEADLESS_PORT || "9334";
@@ -27,6 +29,7 @@ const IG_PROFILE = process.env.IG_HEADLESS_PROFILE || `${process.env.HOME}/.brow
 const HUB = `http://${process.env.TELEGRAM_HUB_HOST || "127.0.0.1"}:${process.env.TELEGRAM_HUB_PORT || "4713"}`;
 const POLL_SECONDS = Number(process.env.IG_POLL_SECONDS) || 120;
 const STATE_FILE = process.env.IG_STATE_FILE || "/tmp/ig-source-state.json";
+const EXPECTED_HUB_ID = process.env.TELEGRAM_HUB_ID || "";
 // Never treat a row older than this as new inbound. The preview-only dedup can't
 // tell "old message still at the top of the thread" from "new message", so an
 // absolute-age guard is the backstop: a 6-week-old DM can never be ingested as new.
@@ -34,8 +37,9 @@ const MAX_AGE_HOURS = Number(process.env.IG_MAX_AGE_HOURS) || 48;
 
 const log = (...a: unknown[]) => console.error("[ig-source]", ...a);
 
-type Row = { name: string; preview: string };
-type State = { previews: Record<string, string> };
+export type Row = { name: string; preview: string };
+export type State = { previews: Record<string, string> };
+const REQUIRE_REVIEW_SESSION = process.env.IG_REQUIRE_REVIEW_SESSION !== "0";
 
 function loadState(): State | null {
   if (!existsSync(STATE_FILE)) return null;
@@ -189,7 +193,7 @@ function isInbound(preview: string): boolean {
   return true;
 }
 
-async function ingest(row: Row) {
+async function ingest(row: Row): Promise<boolean> {
   const body = {
     platform: "instagram",
     chat_id: row.name,
@@ -208,66 +212,151 @@ async function ingest(row: Row) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) log(`WARN: /ingest returned ${res.status} for "${row.name}"`);
-    else log(`ingested DM from "${row.name}": ${row.preview.slice(0, 80)}`);
+    const data = await res.json().catch(() => undefined) as { ok?: boolean; error?: string } | undefined;
+    if (!res.ok || data?.ok !== true) {
+      log(`WARN: /ingest returned ${res.status} for "${row.name}" (${data?.error ?? "unknown error"})`);
+      return false;
+    }
+    log(`ingested DM from "${row.name}": ${row.preview.slice(0, 80)}`);
+    return true;
   } catch (e) {
     log("WARN: could not reach hub /ingest:", e);
+    return false;
   }
 }
 
-async function poll(state: State, firstRun: boolean) {
-  if (!(await ensureChrome())) {
-    log(`IG Chrome unavailable on :${IG_PORT} — retrying next tick.`);
-    return;
+async function reviewSessionReady(): Promise<boolean> {
+  if (!REQUIRE_REVIEW_SESSION) return true;
+  try {
+    const res = await fetch(`${HUB}/health`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return isExpectedReviewHub(data, EXPECTED_HUB_ID, projectRoot);
+  } catch {
+    return false;
   }
-  const res = await readInbox();
-  if (!res) return; // transient (Chrome down / parse fail) — try again next tick
-  if (res.page_status !== "ok") {
-    log(`inbox page_status=${res.page_status} — needs attention (re-run start-headless.sh --gui). Skipping.`);
-    return;
-  }
-  for (const row of res.rows ?? []) {
+}
+
+export function isExpectedReviewHub(
+  data: unknown,
+  expectedInstance: string,
+  expectedProjectRoot: string,
+): boolean {
+  if (!expectedInstance || !expectedProjectRoot || !data || typeof data !== "object") return false;
+  const health = data as { instance?: unknown; projectRoot?: unknown; roles?: { review?: unknown } };
+  return health.instance === expectedInstance
+    && health.projectRoot === expectedProjectRoot
+    && health.roles?.review === true;
+}
+
+export async function applyInboxRows(
+  state: State,
+  rows: Row[],
+  firstRun: boolean,
+  deliver: (row: Row) => Promise<boolean> = ingest,
+): Promise<boolean> {
+  let changedState = false;
+  for (const row of rows ?? []) {
     if (!row?.name) continue;
     const key = stripAge(row.preview);
     const prev = state.previews[row.name];
     const changed = prev !== key;
-    state.previews[row.name] = key;
     // First run only records a baseline so we don't replay the whole inbox.
-    if (firstRun) continue;
-    if (changed && isInbound(key) && isRecent(row.preview)) await ingest(row);
-    else if (changed && isInbound(key)) log(`skipping stale row from "${row.name}" (age ${ageHours(row.preview)}h > ${MAX_AGE_HOURS}h)`);
+    if (firstRun) {
+      if (changed) {
+        state.previews[row.name] = key;
+        changedState = true;
+      }
+      continue;
+    }
+    if (!changed) continue;
+    if (!isInbound(key)) {
+      state.previews[row.name] = key;
+      changedState = true;
+      continue;
+    }
+    if (!isRecent(row.preview)) {
+      state.previews[row.name] = key;
+      changedState = true;
+      log(`skipping stale row from "${row.name}" (age ${ageHours(row.preview)}h > ${MAX_AGE_HOURS}h)`);
+      continue;
+    }
+    if (await deliver(row)) {
+      state.previews[row.name] = key;
+      changedState = true;
+    } else {
+      log(`delivery failed for "${row.name}" — keeping previous preview so it retries next tick`);
+    }
   }
-  saveState(state);
+  return changedState;
+}
+
+async function poll(state: State, firstRun: boolean): Promise<boolean> {
+  if (!(await reviewSessionReady())) {
+    log("review session is not bound on the hub — skipping inbox read so no DMs are acknowledged");
+    return false;
+  }
+  if (!(await ensureChrome())) {
+    log(`IG Chrome unavailable on :${IG_PORT} — retrying next tick.`);
+    return false;
+  }
+  const res = await readInbox();
+  if (!res) return false; // transient (Chrome down / parse fail) — try again next tick
+  if (res.page_status !== "ok") {
+    log(`inbox page_status=${res.page_status} — needs attention (re-run start-headless.sh --gui). Skipping.`);
+    return false;
+  }
+  if (await applyInboxRows(state, res.rows ?? [], firstRun)) saveState(state);
+  return true;
 }
 
 async function main() {
   const existing = loadState();
   const state: State = existing ?? { previews: {} };
-  const firstRun = existing === null;
+  let needsBaseline = existing === null;
   log(`polling Instagram inbox every ${POLL_SECONDS}s → ${HUB}/ingest`);
-  if (firstRun) log("first run: recording a baseline (no replay of existing threads)");
+  if (needsBaseline) log("first run: recording a baseline (no replay of existing threads)");
 
   // Reentrancy guard: a slow read (headless IG) can outlast the poll interval. Two
   // overlapping ticks each spin up ig.sh, which collide on the shared browser-harness
   // daemon socket (/tmp/bu-ig.sock) — that read then fails and the tick bails before
   // saveState, leaving the dedup baseline stale. Skip a tick while one is in flight.
   let inFlight = false;
-  const tick = async (isFirst: boolean) => {
+  const tick = async () => {
     if (inFlight) {
       log("previous poll still running — skipping this tick");
       return;
     }
     inFlight = true;
     try {
-      await poll(state, isFirst);
+      const completed = await poll(state, needsBaseline);
+      if (completed && needsBaseline) needsBaseline = false;
     } finally {
       inFlight = false;
     }
   };
 
   // Prime the baseline immediately, then poll on the interval.
-  await tick(firstRun);
-  setInterval(() => void tick(false), POLL_SECONDS * 1000);
+  await tick();
+  setInterval(() => void tick(), POLL_SECONDS * 1000);
 }
 
-main();
+function loadDotEnv(path: string) {
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!process.env[key]) process.env[key] = value;
+  }
+}
+
+if (import.meta.main) {
+  main();
+}

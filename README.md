@@ -39,7 +39,21 @@ Preserved on every inbound and outbound path.
 
 ## Run
 
-Start the hub (one process):
+For the Raffin deployment, run the role fleet:
+
+```bash
+./fleet.sh start       # hub + review Claude + ops Claude
+./fleet.sh start-ig    # opt-in Instagram polling when the review channel is ready
+./fleet.sh status
+```
+
+`RAFFIN_REVIEW_TELEGRAM_CHAT_ID` receives customer-decision work, including
+Instagram draft review. `RAFFIN_OPS_TELEGRAM_CHAT_ID` receives program-management
+work such as status, logs, restarts, and diagnostics. Instagram polling is not
+started by foreground Claude sessions or by `hub.sh start` unless explicitly
+requested.
+
+For local/manual sessions, start the hub (one process):
 
 ```bash
 bun run hub
