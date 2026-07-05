@@ -10,6 +10,7 @@
     "channel": "bun run src/channel.ts",
     "ig-source": "bun run src/ig-source.ts",
     "ig-drafts": "bun run scripts/ig-drafts.ts",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

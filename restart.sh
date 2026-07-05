@@ -11,7 +11,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 echo "Restarting hub ..."
-./hub.sh restart
+IG_SOURCE="${IG_SOURCE:-0}" ./hub.sh restart
 
 echo ""
 # Hand off to run.sh for the session (its hub-ensure step is a no-op now).

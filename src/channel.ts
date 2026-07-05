@@ -15,25 +15,15 @@ import {
   logConversationEvent,
   type ConversationEventRow,
 } from "./history.js";
+import {
+  parseRaffinSessionRole,
+  validateRoutingConfig,
+  type ChannelWireEvent,
+  type RaffinSessionRole,
+} from "./routing.js";
+import { telegramIntegerId } from "./telegram-ids.js";
 
-type TelegramWireEvent = {
-  platform: "telegram" | "instagram";
-  chat_id: string;
-  chat_type: string;
-  chat_title?: string;
-  message_thread_id?: string;
-  conversation_id: string;
-  message_id: string;
-  content: string;
-  created_timestamp: number;
-  is_dm: boolean;
-  mentions_bot: boolean;
-  is_command: boolean;
-  user_id: string;
-  user_name: string;
-  user_display_name: string;
-  user_is_bot: boolean;
-};
+type TelegramWireEvent = ChannelWireEvent;
 
 type ChatRule = "all" | "mention";
 
@@ -65,10 +55,36 @@ if (!HUB_ID) {
 const API_BASE = process.env.TELEGRAM_API_BASE || "https://api.telegram.org";
 const API = `${API_BASE}/bot${TELEGRAM_BOT_TOKEN}`;
 
-const boundChat = process.env.TELEGRAM_CHAT?.trim();
-const isChatSession = !!boundChat && boundChat !== "*";
+const sessionRoleRaw = process.env.RAFFIN_SESSION_ROLE?.trim();
+const sessionRole = parseRaffinSessionRole(sessionRoleRaw);
+if (sessionRoleRaw && !sessionRole) {
+  console.error("[telegram-channel] ERROR: RAFFIN_SESSION_ROLE must be one of: review, ops");
+  process.exit(1);
+}
+
+const reviewChat = process.env.RAFFIN_REVIEW_TELEGRAM_CHAT_ID?.trim()
+  || process.env.BAKER_TELEGRAM_CHAT_ID?.trim()
+  || "";
+const opsChat = process.env.RAFFIN_OPS_TELEGRAM_CHAT_ID?.trim() || "";
+const routingConfigError = validateRoutingConfig({ reviewChatId: reviewChat, opsChatId: opsChat });
+if (routingConfigError) {
+  console.error(`[telegram-channel] ERROR: ${routingConfigError}`);
+  process.exit(1);
+}
+if (sessionRole === "review" && !reviewChat) {
+  console.error("[telegram-channel] ERROR: RAFFIN_REVIEW_TELEGRAM_CHAT_ID required for review sessions");
+  process.exit(1);
+}
+if (sessionRole === "ops" && !opsChat) {
+  console.error("[telegram-channel] ERROR: RAFFIN_OPS_TELEGRAM_CHAT_ID required for ops sessions");
+  process.exit(1);
+}
+
+const roleChat = sessionRole === "review" ? reviewChat : sessionRole === "ops" ? opsChat : "";
+const boundChat = sessionRole ? roleChat : process.env.TELEGRAM_CHAT?.trim();
+const isChatSession = !sessionRole && !!boundChat && boundChat !== "*";
 // Telegram chat the session forwards Instagram DMs to for baker review.
-const bakerChat = process.env.BAKER_TELEGRAM_CHAT_ID?.trim() || "";
+const bakerChat = reviewChat;
 
 let hubWs: WebSocket | undefined;
 let reconnect = true;
@@ -95,6 +111,23 @@ const log = (...args: unknown[]) => {
 };
 
 const soulPrompt = loadSoulPrompt();
+const sessionDescription = describeSession(sessionRole, boundChat);
+const instagramInstructions = sessionRole === "ops"
+  ? [
+    "## Instagram",
+    "Instagram DMs are customer inquiries handled by the review session. Do not draft or send Instagram replies from the ops session unless the operator explicitly asks for diagnosis or status.",
+  ]
+  : [
+    "## Instagram (via ig-relay) — baker-reviewed replies",
+    'Some events are Instagram DMs: platform "instagram", conversation_id like instagram:thread:<name>, content prefixed `📷 Instagram DM from "<name>"`. These are baker-reviewed. Do NOT reply to the Instagram customer directly, and do NOT treat them as a Telegram conversation to answer with the reply tool.',
+    `Handle an Instagram DM like this:`,
+    `1. Read the full thread for context: \`IG_OPEN="<name>" docs/functions/ig-relay/ig.sh read_inbox\`.`,
+    `2. Draft a suggested reply in Raffin's voice, grounded in the knowledge sources.`,
+    `3. Register the draft so it can be tracked: \`IG_DRAFT_NAME="<name>" IG_DRAFT_MESSAGE="<customer message>" IG_DRAFT_REPLY="<your draft>" bun run scripts/ig-drafts.ts add\`. It returns a draft id like IG-7.`,
+    `4. Forward it to the baker for review with the reply tool, chat_id ${bakerChat || "<set RAFFIN_REVIEW_TELEGRAM_CHAT_ID in .env>"} — include the draft id, the sender name, the customer's message, and your suggested reply, and tell the baker to respond with "approve IG-7", "edit IG-7 <new text>", or "skip IG-7".`,
+    `5. When a baker Telegram message references a draft id: load it with \`bun run scripts/ig-drafts.ts get <id>\` to recover the IG name. For approve/edit, send the final text to Instagram: \`IG_OPEN="<name from draft>" IG_TEXT="<final text>" docs/functions/ig-relay/ig.sh send_reply\`, then \`IG_DRAFT_FINAL="<final text>" bun run scripts/ig-drafts.ts resolve <id> sent\`. For skip, \`bun run scripts/ig-drafts.ts resolve <id> skipped\` and send nothing.`,
+    `Never send to Instagram without an approved draft id. \`bun run scripts/ig-drafts.ts list --pending\` shows drafts still awaiting the baker. See docs/baker_check.md.`,
+  ];
 
 const instructions = [
   soulPrompt ? `## Personality\n\n${soulPrompt}` : "",
@@ -104,18 +137,8 @@ const instructions = [
   "Reply with the reply tool. Pass chat_id, message_id, and conversation_id from the inbound metadata when responding to a user message.",
   "Telegram-specific chat, topic, mention, and command details are included in a <telegram-context> block before the message text. If message_thread_id is present (a forum topic), pass it to the reply tool so the answer lands in that topic.",
   'Formatting: by default reply text is sent with parse_mode "HTML". Use only Telegram\'s HTML subset (<b>, <i>, <u>, <s>, <a href="...">, <code>, <pre>, <blockquote>) and escape literal <, >, & as &lt;, &gt;, &amp;. Use real newlines, never <br>. For plain text pass parse_mode "plain". Keep replies concise unless the user asks for detail.',
-  isChatSession
-    ? `You are dedicated to Telegram chat ${boundChat}.`
-    : "You are the Telegram fallback session. You receive events from every chat that has no dedicated session.",
-  "## Instagram (via ig-relay) — baker-reviewed replies",
-  'Some events are Instagram DMs: platform "instagram", conversation_id like instagram:thread:<name>, content prefixed `📷 Instagram DM from "<name>"`. These are baker-reviewed. Do NOT reply to the Instagram customer directly, and do NOT treat them as a Telegram conversation to answer with the reply tool.',
-  `Handle an Instagram DM like this:`,
-  `1. Read the full thread for context: \`IG_OPEN="<name>" docs/functions/ig-relay/ig.sh read_inbox\`.`,
-  `2. Draft a suggested reply in Raffin's voice, grounded in the knowledge sources.`,
-  `3. Register the draft so it can be tracked: \`IG_DRAFT_NAME="<name>" IG_DRAFT_MESSAGE="<customer message>" IG_DRAFT_REPLY="<your draft>" bun run scripts/ig-drafts.ts add\`. It returns a draft id like IG-7.`,
-  `4. Forward it to the baker for review with the reply tool, chat_id ${bakerChat || "<set BAKER_TELEGRAM_CHAT_ID in .env>"} — include the draft id, the sender name, the customer's message, and your suggested reply, and tell the baker to respond with "approve IG-7", "edit IG-7 <new text>", or "skip IG-7".`,
-  `5. When a baker Telegram message references a draft id: load it with \`bun run scripts/ig-drafts.ts get <id>\` to recover the IG name. For approve/edit, send the final text to Instagram: \`IG_OPEN="<name from draft>" IG_TEXT="<final text>" docs/functions/ig-relay/ig.sh send_reply\`, then \`IG_DRAFT_FINAL="<final text>" bun run scripts/ig-drafts.ts resolve <id> sent\`. For skip, \`bun run scripts/ig-drafts.ts resolve <id> skipped\` and send nothing.`,
-  `Never send to Instagram without an approved draft id. \`bun run scripts/ig-drafts.ts list --pending\` shows drafts still awaiting the baker. See docs/baker_check.md.`,
+  sessionDescription,
+  ...instagramInstructions,
 ].filter(Boolean).join("\n");
 
 const mcp = new Server(
@@ -174,6 +197,14 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   const recent = replyToMessageId
     ? inboundByMessageId.get(replyToMessageId) ?? recentInboundByChat.get(chatId)
     : recentInboundByChat.get(chatId);
+  const conversationArg = typeof a.conversation_id === "string" ? a.conversation_id : "";
+  const isInstagramContext = recent?.platform === "instagram" || conversationArg.startsWith("instagram:");
+  if (isInstagramContext && !isAllowedInstagramForwardChat(chatId)) {
+    return {
+      ...text("Rejected: Instagram customer events cannot be answered with Telegram reply to the customer. Forward drafts only to the configured review/ops Telegram chat."),
+      isError: true,
+    };
+  }
   const threadId = typeof a.message_thread_id === "string" && a.message_thread_id
     ? a.message_thread_id
     : recent?.message_thread_id;
@@ -250,7 +281,7 @@ async function handleHubEvent(event: TelegramWireEvent) {
     log("WARN: inbound log failed:", err);
   }
 
-  void sendTypingIndicator(event.chat_id, event.message_thread_id);
+  if (event.platform === "telegram") void sendTypingIndicator(event.chat_id, event.message_thread_id);
   await forwardToClaudeChannel(event, formatConversationContext(recentEvents));
 }
 
@@ -281,6 +312,7 @@ async function forwardToClaudeChannel(event: TelegramWireEvent, contextBlock: st
 function formatTelegramContext(event: TelegramWireEvent): string {
   const attrs = [
     ["chat_id", event.chat_id],
+    ["platform", event.platform],
     ["chat_type", event.chat_type],
     ["chat_title", event.chat_title],
     ["message_thread_id", event.message_thread_id],
@@ -300,6 +332,17 @@ function formatTelegramContext(event: TelegramWireEvent): string {
 }
 
 function acceptDecision(event: TelegramWireEvent): { accept: boolean; reason: string } {
+  if (sessionRole === "review") {
+    if (event.platform === "instagram") return { accept: true, reason: "role-review-instagram" };
+    if (event.platform === "telegram" && event.chat_id === reviewChat) return { accept: true, reason: "role-review-telegram" };
+    return { accept: false, reason: "different-role" };
+  }
+
+  if (sessionRole === "ops") {
+    if (event.platform === "telegram" && event.chat_id === opsChat) return { accept: true, reason: "role-ops-telegram" };
+    return { accept: false, reason: "different-role" };
+  }
+
   if (isChatSession && event.chat_id !== boundChat) {
     return { accept: false, reason: "different-chat" };
   }
@@ -319,6 +362,9 @@ function chatRuleFor(chatId: string): ChatRule {
 
 function bindPayload(): Record<string, unknown> {
   const base = { instanceId: HUB_ID };
+  if (sessionRole) {
+    return { ...base, type: "bind-role", role: sessionRole, chatId: boundChat, label: `${sessionRole}:${boundChat || "unbound"}` };
+  }
   if (isChatSession) return { ...base, type: "bind-chat", chatId: boundChat, label: boundChat };
   return { ...base, type: "bind-fallback" };
 }
@@ -345,7 +391,7 @@ async function connectToHub() {
         const data = JSON.parse(String(msg.data));
         if (data.type === "error") {
           log(`ERROR from hub: ${data.message}`);
-          if (data.message === "duplicate-chat-session" || data.message === "duplicate-fallback-session" || data.message === "instance-mismatch") {
+          if (data.message === "duplicate-role-session" || data.message === "duplicate-chat-session" || data.message === "duplicate-fallback-session" || data.message === "instance-mismatch" || data.message === "invalid-role-session") {
             reconnect = false;
             process.exit(1);
           }
@@ -407,10 +453,12 @@ async function sendTelegramMessage(args: {
     text: args.text,
   };
   if (args.parseMode) body.parse_mode = args.parseMode;
-  if (args.threadId) body.message_thread_id = Number(args.threadId);
-  if (args.messageId) {
+  const threadId = telegramIntegerId(args.threadId);
+  if (threadId !== undefined) body.message_thread_id = threadId;
+  const messageId = telegramIntegerId(args.messageId);
+  if (messageId !== undefined) {
     body.reply_parameters = {
-      message_id: Number(args.messageId),
+      message_id: messageId,
       allow_sending_without_reply: true,
     };
   }
@@ -492,6 +540,30 @@ function loadConfig(): Config {
   } catch {
     return { defaultRule: "mention" };
   }
+}
+
+function describeSession(role: RaffinSessionRole | undefined, chatId: string | undefined): string {
+  if (role === "review") {
+    return [
+      `You are the Raffin review session bound to Telegram chat ${chatId}.`,
+      "This is the operator's customer-decision channel: review Instagram DMs, draft replies, handle approve/edit/skip commands, and escalate baker checkpoints.",
+      "Every Telegram message in this review chat is operator-directed; answer it without requiring an @mention.",
+    ].join("\n");
+  }
+  if (role === "ops") {
+    return [
+      `You are the Raffin ops session bound to Telegram chat ${chatId}.`,
+      "This is the program-management channel: status, logs, restart/pause/resume requests, health alerts, and operational diagnostics.",
+      "Do not handle Instagram customer reply approvals here unless the operator explicitly asks for diagnosis or rerouting.",
+    ].join("\n");
+  }
+  return isChatSession
+    ? `You are dedicated to Telegram chat ${chatId}.`
+    : "You are the Telegram fallback session. You receive events from every chat that has no dedicated session.";
+}
+
+function isAllowedInstagramForwardChat(chatId: string): boolean {
+  return [reviewChat, bakerChat].filter(Boolean).includes(chatId);
 }
 
 // Optional persona, injected into the MCP server instructions as ## Personality.
