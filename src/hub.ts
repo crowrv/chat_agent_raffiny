@@ -12,6 +12,7 @@ import {
   type ChannelWireEvent,
   type RaffinSessionRole,
 } from "./routing.js";
+import { canonicalPath } from "./paths.js";
 
 type SessionInfo = {
   chatId?: string;
@@ -41,7 +42,7 @@ type TgMessage = {
 type TgUpdate = { update_id: number; message?: TgMessage };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const projectRoot = resolve(__dirname, "..");
+const projectRoot = canonicalPath(resolve(__dirname, ".."));
 
 loadDotEnv(resolve(projectRoot, ".env"));
 

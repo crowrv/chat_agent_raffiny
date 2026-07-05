@@ -19,6 +19,9 @@ fi
 
 SESSION="${RAFFIN_TMUX_SESSION:-raffiny}"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
+# Canonical project root (symlinks + true case resolved) so the hub-identity
+# health check matches src/hub.ts, which reports realpathSync(projectRoot).
+PROJECT_ROOT="$(bun -e 'console.log(require("fs").realpathSync(process.cwd()))' 2>/dev/null || echo "$PWD")"
 KEEP_AWAKE=""
 if command -v caffeinate >/dev/null 2>&1; then
   KEEP_AWAKE="caffeinate -ids"
@@ -102,7 +105,7 @@ hub_review_ready() {
     const data = await res.json().catch(() => ({}));
     const sameHub = data?.instance === expectedInstance && data?.projectRoot === expectedRoot;
     process.exit(sameHub && data?.roles?.review === true ? 0 : 1);
-  ' "$url" "${TELEGRAM_HUB_ID:-}" "$PWD"
+  ' "$url" "${TELEGRAM_HUB_ID:-}" "$PROJECT_ROOT"
 }
 
 wait_for_review() {

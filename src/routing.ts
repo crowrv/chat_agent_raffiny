@@ -59,26 +59,38 @@ export function routingCandidates(
   const addChat = (chatId: string, label = `chat:${chatId}`) => {
     targets.push({ kind: "chat", chatId, label });
   };
+  const addFallback = () => {
+    if (includeFallback) targets.push({ kind: "fallback", label: "fallback" });
+  };
 
+  // Instagram customer DMs are deliberately review-only: they must never land in
+  // the fallback session, which would bypass the baker-review invariant (drafts
+  // approved before anything is sent). If no review session is bound the hub
+  // reports the event unrouted so the feeder retries instead of leaking it.
   if (event.platform === "instagram") {
     addRole("review");
     return targets;
   }
 
+  // Role-targeted Telegram chats prefer their role session, then a dedicated chat
+  // session, then the fallback session as a last resort so an operator/baker
+  // message is never silently dropped while the role session is down.
   if (reviewChatId && event.chat_id === reviewChatId) {
     addRole("review");
     addChat(event.chat_id);
+    addFallback();
     return targets;
   }
 
   if (opsChatId && event.chat_id === opsChatId) {
     addRole("ops");
     addChat(event.chat_id);
+    addFallback();
     return targets;
   }
 
   addChat(event.chat_id);
-  if (includeFallback) targets.push({ kind: "fallback", label: "fallback" });
+  addFallback();
   return targets;
 }
 

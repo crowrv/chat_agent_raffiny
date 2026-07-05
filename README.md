@@ -53,6 +53,18 @@ work such as status, logs, restarts, and diagnostics. Instagram polling is not
 started by foreground Claude sessions or by `hub.sh start` unless explicitly
 requested.
 
+> **⚠️ Breaking change — Instagram intake now requires a `review` session.**
+> Instagram customer DMs route **only** to the `review` role session; they never
+> fall back to a plain fallback/dedicated session (that would bypass the
+> baker-review invariant). With `IG_REQUIRE_REVIEW_SESSION=1` (default), the
+> feeder also refuses to read the inbox until a `review` session is bound, so no
+> DM is marked "seen" without a place to send it. **A fallback-only deployment
+> (`./run.sh` / `bun run hub` with no role session) will stop receiving Instagram
+> DMs.** To keep IG intake working, run `./fleet.sh start` (which starts a
+> `review` session) and set `RAFFIN_REVIEW_TELEGRAM_CHAT_ID`, then
+> `./fleet.sh start-ig`. Telegram messages are unaffected — they still fall back
+> when a role session is down.
+
 For local/manual sessions, start the hub (one process):
 
 ```bash

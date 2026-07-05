@@ -47,6 +47,7 @@ describe("routingCandidates", () => {
     expect(routingCandidates(event, config)).toEqual([
       { kind: "role", role: "review", label: "role:review" },
       { kind: "chat", chatId: "review-chat", label: "chat:review-chat" },
+      { kind: "fallback", label: "fallback" },
     ]);
   });
 
@@ -60,6 +61,20 @@ describe("routingCandidates", () => {
     expect(routingCandidates(event, config)).toEqual([
       { kind: "role", role: "ops", label: "role:ops" },
       { kind: "chat", chatId: "ops-chat", label: "chat:ops-chat" },
+      { kind: "fallback", label: "fallback" },
+    ]);
+  });
+
+  test("omits fallback for a role chat when includeFallback is false", () => {
+    const event = {
+      ...baseEvent,
+      chat_id: "review-chat",
+      conversation_id: "telegram:chat:review-chat",
+    };
+
+    expect(routingCandidates(event, { ...config, includeFallback: false })).toEqual([
+      { kind: "role", role: "review", label: "role:review" },
+      { kind: "chat", chatId: "review-chat", label: "chat:review-chat" },
     ]);
   });
 

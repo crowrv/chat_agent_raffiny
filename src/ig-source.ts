@@ -18,8 +18,9 @@ import { $ } from "bun";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { canonicalPath } from "./paths.js";
 
-const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const projectRoot = canonicalPath(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
 loadDotEnv(resolve(projectRoot, ".env"));
 
 const IG_SH = resolve(projectRoot, "docs/functions/ig-relay/ig.sh");

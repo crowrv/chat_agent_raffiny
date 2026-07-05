@@ -45,6 +45,9 @@ IG_LOG="/tmp/ig-source.log"
 HUB_HOST="${TELEGRAM_HUB_HOST:-127.0.0.1}"
 HUB_PORT="${TELEGRAM_HUB_PORT:-4713}"
 EXPECTED_HUB_ID="${TELEGRAM_HUB_ID:-}"
+# Canonical project root (symlinks + true case resolved) so the hub-identity
+# health check matches src/hub.ts, which reports realpathSync(projectRoot).
+PROJECT_ROOT="$(bun -e 'console.log(require("fs").realpathSync(process.cwd()))' 2>/dev/null || echo "$PWD")"
 
 process_matches() {
   local pid="$1"
@@ -69,7 +72,7 @@ process_cwd_matches() {
   elif command -v lsof >/dev/null 2>&1; then
     cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
   fi
-  [ -n "$cwd" ] && [ "$cwd" = "$PWD" ]
+  [ -n "$cwd" ] && [ "$cwd" = "$PROJECT_ROOT" ]
 }
 
 find_owned_pids() {
@@ -118,7 +121,7 @@ hub_health_matches() {
     if (!res?.ok) process.exit(1);
     const data = await res.json().catch(() => ({}));
     process.exit(data?.instance === expectedInstance && data?.projectRoot === expectedRoot ? 0 : 1);
-  ' "$url" "$EXPECTED_HUB_ID" "$PWD"
+  ' "$url" "$EXPECTED_HUB_ID" "$PROJECT_ROOT"
 }
 
 hub_review_ready() {
@@ -131,7 +134,7 @@ hub_review_ready() {
     const data = await res.json().catch(() => ({}));
     const sameHub = data?.instance === expectedInstance && data?.projectRoot === expectedRoot;
     process.exit(sameHub && data?.roles?.review === true ? 0 : 1);
-  ' "$url" "$EXPECTED_HUB_ID" "$PWD"
+  ' "$url" "$EXPECTED_HUB_ID" "$PROJECT_ROOT"
 }
 
 wait_for_hub_health() {
