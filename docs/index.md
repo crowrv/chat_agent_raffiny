@@ -16,7 +16,7 @@ The pages the ordering agent reads to serve customers. Cross-referenced with `[[
 
 | Page | Summary |
 |------|---------|
-| [[raffin_sop]] — [`raffin_sop.md`](./raffin_sop.md) | Internal **operating procedures**: lead times, pickup locations/hours, payment & 50% deposit rules, production workflow, packaging/labeling, allergen handling, cancellation policy, MEHKO licensing, and the escalation list. |
+| [[raffin_sop]] — [`raffin_sop.md`](./raffin_sop.md) | Internal **operating procedures**: lead times, pickup locations/hours, payment & upfront-payment rules, production workflow, packaging/labeling, allergen handling, cancellation policy, MEHKO licensing, and the escalation list. |
 | [[raffin_faq]] — [`raffin_faq.md`](./raffin_faq.md) | **Pre-approved answers** to the questions customers ask most (ordering, lead time, pricing, pickup/delivery, flavors, allergens, storage, cancellations). Consult before improvising. |
 | [[baker_check]] — [`baker_check.md`](./baker_check.md) | **Human-in-the-loop checkpoints** — what the agent must hand to the baker instead of deciding alone: payment confirmation (#1), out-of-window pickup, delivery, custom/large orders, rush orders, cancellations/refunds, allergies, complaints, address sharing. |
 | [`agent/system_prompt.md`](./agent/system_prompt.md) | Standalone system-prompt version of the persona + step-by-step ordering flow, preserved from the earlier build. The live operating contract is [`../CLAUDE.md`](../CLAUDE.md); this is kept for reference. |

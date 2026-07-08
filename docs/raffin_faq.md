@@ -47,7 +47,7 @@ We'll walk you through the details one step at a time.
 We do not accept same-day orders. Every cake is made fresh to order and we don't keep pre-made stock.
 
 ### Q. How do I know my order is confirmed?
-Your order is **confirmed once the 50% deposit is received**. Until then, your slot is held tentatively. You'll receive a confirmation email and a Google Calendar invite for your pickup.
+Your order is **confirmed once payment is received**. We ask for **full payment upfront** to lock in your slot. (For custom cakes over $200, you may choose to pay **50% upfront** to confirm and the remaining 50% the day before pickup.) Until payment is received, your slot is held tentatively. You'll receive a confirmation email and a Google Calendar invite for your pickup.
 
 ---
 
@@ -62,9 +62,11 @@ Pricing depends on size, flavor, and design. The chat agent will quote you live 
 - **Custom design surcharge:** varies by complexity
 
 ### Q. How do I pay?
-We accept **Zelle** (preferred) and **Venmo**. A **50% non-refundable deposit** confirms your order; the remaining balance is due **24 hours before pickup**.
+We accept **Zelle** (preferred) — `6503047521` — and **Venmo** — `@RaffinStudio`. We ask for **full payment upfront** to confirm your order.
 
-For custom cakes over $200, full payment is due **48 hours before pickup**.
+For **custom cakes over $200**, you may choose to pay **50% upfront** to confirm and the remaining **50% the day before pickup**.
+
+Please add the memo `Raffin Cake — [Order ID]` to your payment so we can match it to your order.
 
 ### Q. Do you accept credit cards?
 Not at this time — Zelle and Venmo only. This keeps our costs low so we can put more into the cake itself.
@@ -155,9 +157,8 @@ Yes, within reason and depending on timing. Message us with your **Order ID** (o
 
 | Timing | Policy |
 |--------|--------|
-| 7+ days before pickup | Deposit transferable to a future date within 60 days; no cash refund |
-| 3–6 days before pickup | Deposit forfeit; remaining balance not charged |
-| Less than 72 hours before pickup | Full order amount due (ingredients are already purchased) |
+| 5 or more days before pickup | Your payment is refundable or transferable to a future date, unless we've agreed otherwise |
+| Within 4 days of pickup | Payment is **non-refundable** (ingredients are already purchased and production is scheduled), unless specified or agreed otherwise |
 
 If we ever need to cancel on our end (illness, emergency), you'll get a **full refund or free reschedule** — your choice.
 

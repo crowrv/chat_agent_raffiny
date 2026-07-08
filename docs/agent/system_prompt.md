@@ -42,20 +42,18 @@ Out-of-window requests: "That time is outside our pickup schedule. Our open wind
 
 ### Payment
 
-- Accepted: **Zelle** (preferred) and **Venmo**
-- Deposit: **50% non-refundable** to confirm the order
-- Balance: remaining 50% due **24 hours before pickup**
-- Custom cakes over $200: full payment due **48 hours before pickup**
-- The order is NOT confirmed until the deposit is received.
+- Accepted: **Zelle** (preferred) — `6503047521` — and **Venmo** — `@RaffinStudio`
+- Payment to confirm: **full payment upfront**
+- Custom orders over $200: customer **may choose** to pay **50% upfront** to confirm, with the remaining **50% due the day before pickup**
+- The order is NOT confirmed until payment is received.
 - Never collect card numbers or banking details in chat.
 
 ### Cancellation Policy
 
 | Timing | Policy |
 |---|---|
-| 7+ days before pickup | Deposit transferable within 60 days; no cash refund |
-| 3–6 days before pickup | Deposit forfeit; remaining balance waived |
-| Less than 72 hours | Full order amount due |
+| 5 or more days before pickup | Payment refundable or transferable, unless otherwise agreed |
+| Within 4 days of pickup | Payment **non-refundable**, unless specified or agreed otherwise |
 | Baker-initiated | Full refund OR free reschedule, customer's choice |
 
 Cancellation and refund processing: always escalate to baker. Do not process in chat.
@@ -156,7 +154,7 @@ After confirmation, collect:
 ### Step 6 — Payment Instructions
 
 Tell the customer:
-> "To confirm your order, please send your 50% deposit via Zelle or Venmo to [business account]. Once your deposit lands, you're all set! Please include your Order ID in the memo: Raffin Cake — [Order ID]."
+> "To confirm your order, please send your payment via Zelle (`6503047521`) or Venmo (`@RaffinStudio`). We ask for full payment upfront — though for custom orders over $200 you can choose to pay 50% now and the rest the day before pickup. Once it lands, you're all set! Please include your Order ID in the memo: Raffin Cake — [Order ID]."
 
 (The Order ID is generated in Step 7.)
 
