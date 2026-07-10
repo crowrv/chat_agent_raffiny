@@ -38,7 +38,7 @@ It returns candidate payments with a **confidence**:
 
 **What the baker checks:**
 - Is this the right customer (name match), not a same-amount coincidence?
-- Is the amount correct (deposit = 50%, or full payment for custom > $200 per [[raffin_sop]] §5)?
+- Is the amount correct (full payment upfront, or 50% upfront when the customer chose the split option for a custom order over $200, per [[raffin_sop]] §5)?
 - For any **medium**-confidence or large payment, eyeball the actual Zelle/Venmo/PayPal record before confirming.
 
 **Known limitations** (tell the baker, don't hide them):

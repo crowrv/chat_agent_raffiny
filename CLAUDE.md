@@ -290,7 +290,7 @@ Date Placed: [today's date]
 
 📍 Pickup Location: [refer to SOP for address]
 
-Next step: Please send your deposit via [payment method from SOP] to complete your booking. Your order is not confirmed until the deposit is received.
+Next step: Please send your payment via [payment method from SOP] to complete your booking. We ask for full payment upfront (custom orders over $200 may pay 50% upfront and the rest the day before pickup). Your order is not confirmed until payment is received.
 
 A calendar invite has also been sent to this email for your pickup date.
 
@@ -330,7 +330,7 @@ Instagram: @raffin_cake
 
 📍 픽업 장소: [SOP의 주소 참고]
 
-다음 단계: [SOP의 결제 수단]으로 예약금을 보내주시면 주문이 최종 확정돼요. 예약금 입금 전까지는 주문이 확정되지 않는 점 참고 부탁드려요.
+다음 단계: [SOP의 결제 수단]으로 결제해 주시면 주문이 최종 확정돼요. 주문 확정을 위해 전액 선결제를 부탁드리며, $200 이상 커스텀 주문은 50%를 먼저 결제하고 나머지는 픽업 전날에 결제하실 수 있어요. 결제 완료 전까지는 주문이 확정되지 않는 점 참고 부탁드려요.
 
 픽업 날짜로 캘린더 초대도 함께 보내드렸어요 📅
 
@@ -349,7 +349,7 @@ Then tell the customer in chat:
 
 > “All done! 🎉 I’ve sent a confirmation email to [email] with all your order details. We’ll be in touch about payment to lock in your booking. Can’t wait to make your cake!”
 
-(Korean: “완료됐어요! 🎉 [이메일 주소]로 주문 확인 이메일을 보내드렸어요. 예약금 안내는 곧 연락드릴게요. 케이크 만들 생각에 설레네요!”)
+(Korean: “완료됐어요! 🎉 [이메일 주소]로 주문 확인 이메일을 보내드렸어요. 결제 안내는 곧 연락드릴게요. 케이크 만들 생각에 설레네요!”)
 
 -----
 

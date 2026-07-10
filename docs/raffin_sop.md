@@ -64,7 +64,7 @@ The baker works alone. All production, packaging, communication, and pickup hand
 - Always negotiate pickup time conversationally within standing hours.
 - Never share the internal Google Calendar booking links with customers.
 - Out-of-window requests must be escalated: "Let me check with the team — we'll either send a calendar invite or follow up by email."
-- The baker confirms the exact Campbell address by email once the deposit is received (do not post the home address publicly).
+- The baker confirms the exact Campbell address by email once payment is received (do not post the home address publicly).
 
 ---
 
@@ -72,17 +72,18 @@ The baker works alone. All production, packaging, communication, and pickup hand
 
 | Item | Policy |
 |------|--------|
-| Accepted methods | **Zelle** (preferred) and **Venmo** to the business account on file |
-| Deposit | **50% deposit** required to confirm the custom order |
-| Balance | Remaining 50% due **24 hours before pickup** |
-| Custom cakes over $200 | Full payment due **48 hours before pickup** |
+| Accepted methods | **Zelle** (preferred) — `6503047521` — and **Venmo** — `@RaffinStudio` |
+| Payment to confirm | **Full payment upfront** is required to confirm the order |
+| Custom orders over $200 | Customer **may choose** to pay **50% upfront** to confirm, with the remaining **50% due the day before pickup** (≈24 hours before) |
 | Receipts | Send a brief Zelle/Venmo memo: `Raffin Cake — [Order ID]` |
 
 **Rules:**
-- The order is **not confirmed** until the deposit is received.
+- The order is **not confirmed** until payment is received — that means **full payment**, or the **50% upfront** for a custom order over $200 when the customer chooses that option.
+- The 50% split is **only** offered for custom orders over $200. All other orders are full payment upfront.
 - **Never** collect card numbers, bank login, or full payment details in chat.
-- If deposit is not received within **48 hours** of the confirmation email, send a reminder. After **72 hours** with no response, cancel the slot and release the date.
-- Mark deposit status in the Orders sheet (`Deposit Paid: Yes/No` + amount + date).
+- If payment is not received within **48 hours** of the confirmation email, send a reminder. After **72 hours** with no response, cancel the slot and release the date.
+- For the split option, send a balance reminder the day before pickup; do not hand off the cake until the remaining 50% is received.
+- Mark payment status in the Orders sheet (`Paid: Yes/No` + amount + date).
 
 ---
 
@@ -122,11 +123,11 @@ The baker works alone. All production, packaging, communication, and pickup hand
 
 | Timing | Policy |
 |--------|--------|
-| 7+ days before pickup | Deposit transferable to a future date within 60 days; no cash refund |
-| 3–6 days before pickup | Deposit forfeit; remaining balance not charged |
-| Less than 72 hours before pickup | Full order amount due (ingredients purchased, production scheduled) |
+| 5 or more days before pickup | Payment refundable or transferable to a future date, unless otherwise agreed |
+| Within 4 days of pickup | Payment is **non-refundable** (ingredients purchased, production scheduled), unless specified or agreed otherwise |
 | Raffin-initiated cancellation (illness, emergency) | Full refund OR free reschedule, customer's choice |
 
+- The **4-day non-refundable window** is the default; the baker may specify or agree to different terms for a given order (e.g. a partial refund or transfer).
 - Refunds are processed by the baker, not the chat agent. Escalate cancellation requests to business@raffin.studio.
 - Document every cancellation in the Orders sheet: change `Order Status` to `Cancelled` and note the reason and refund decision.
 
